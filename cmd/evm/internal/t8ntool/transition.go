@@ -285,6 +285,29 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	return nil
 }
 
+func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
+	// Sanity check pre-allocated EOF code to not panic in state transition.
+	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+		for addr, acc := range prestate.Pre {
+			if vm.HasEOFByte(acc.Code) {
+				var (
+					c   vm.Container
+					err error
+				)
+				err = c.UnmarshalBinary(acc.Code)
+				if err == nil {
+					jt := vm.NewShanghaiEOFInstructionSetForTesting()
+					err = c.ValidateCode(&jt)
+				}
+				if err != nil {
+					return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))
+				}
+			}
+		}
+	}
+	return nil
+}
+
 type Alloc map[common.Address]types.Account
 
 func (g Alloc) OnRoot(common.Hash) {}
