@@ -42,6 +42,12 @@ type operation struct {
 
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
+
+	// undefined denotes if the instruction is not officially defined in the jump table
+	undefined bool
+
+	// terminal denotes if the instruction can be the final opcode in a code section
+	terminal bool
 }
 
 var (
@@ -58,6 +64,7 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
+	shanghaiEOFInstructionSet      = newShanghaiEOFInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -97,11 +104,21 @@ func newCancunInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
+func NewShanghaiEOFInstructionSetForTesting() JumpTable {
+	return newShanghaiEOFInstructionSet()
+}
+
 func newShanghaiInstructionSet() JumpTable {
 	instructionSet := newMergeInstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
+	return validate(instructionSet)
+}
+
+func newShanghaiEOFInstructionSet() JumpTable {
+	instructionSet := newShanghaiInstructionSet()
+	enableEOF(&instructionSet)
 	return validate(instructionSet)
 }
 
@@ -216,6 +233,7 @@ func newByzantiumInstructionSet() JumpTable {
 		minStack:   minStack(2, 0),
 		maxStack:   maxStack(2, 0),
 		memorySize: memoryRevert,
+		terminal:   true,
 	}
 	return validate(instructionSet)
 }
@@ -264,6 +282,7 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: 0,
 			minStack:    minStack(0, 0),
 			maxStack:    maxStack(0, 0),
+			terminal:    true,
 		},
 		ADD: {
 			execute:     opAdd,
@@ -1052,6 +1071,7 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
+			terminal:   true,
 		},
 		SELFDESTRUCT: {
 			execute:    opSelfdestruct,
@@ -1059,12 +1079,18 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 		},
+		INVALID: {
+			execute:  opUndefined,
+			minStack: minStack(0, 0),
+			maxStack: maxStack(0, 0),
+			terminal: true,
+		},
 	}
 
 	// Fill all unassigned slots with opUndefined.
 	for i, entry := range tbl {
 		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
+			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0), undefined: true}
 		}
 	}
 
