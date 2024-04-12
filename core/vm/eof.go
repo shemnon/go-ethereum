@@ -188,7 +188,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	}
 	// The container section is optional, only unmarshal if container section is set.
 	if kind == kindContainer {
-		offset = offset + 2 + len(containerSizes)
+		offset = offset + 2 + 2*len(containerSizes) + 1
 	} else {
 		// empty out falsly parsed container sizes
 		// TODO (MariusVanDerWijden): clean this up, read the kind first before parsing the section list
