@@ -196,6 +196,9 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+	if err := applyEOFChecks(&prestate, chainConfig); err != nil {
+		return err
+	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
 	if err != nil {
