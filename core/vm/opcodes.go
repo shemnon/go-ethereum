@@ -121,9 +121,6 @@ const (
 	TLOAD    OpCode = 0x5c
 	TSTORE   OpCode = 0x5d
 	MCOPY    OpCode = 0x5e
-	RJUMP    OpCode = 0x5c
-	RJUMPI   OpCode = 0x5d
-	RJUMPV   OpCode = 0x5e
 	PUSH0    OpCode = 0x5f
 )
 
@@ -212,10 +209,14 @@ const (
 	LOG4
 )
 
-// 0xb0 range - control flow ops.
+// 0xe0 range - eof operations.
 const (
-	CALLF = 0xb0
-	RETF  = 0xb1
+	RJUMP  = 0xe0
+	RJUMPI = 0xe1
+	RJUMPV = 0xe2
+	CALLF  = 0xe3
+	RETF   = 0xe4
+	JUMPF  = 0xe5
 )
 
 // 0xf0 range - closures.
@@ -314,11 +315,7 @@ var opCodeToString = [256]string{
 	TLOAD:    "TLOAD",
 	TSTORE:   "TSTORE",
 	MCOPY:    "MCOPY",
-	// TODO (MariusVanDerWijden) reenable once moved
-	//RJUMP:    "RJUMP",
-	//RJUMPI:   "RJUMPI",
-	//RJUMPV:   "RJUMPV",
-	PUSH0: "PUSH0",
+	PUSH0:    "PUSH0",
 
 	// 0x60 range - pushes.
 	PUSH1:  "PUSH1",
@@ -397,9 +394,13 @@ var opCodeToString = [256]string{
 	LOG3: "LOG3",
 	LOG4: "LOG4",
 
-	// 0xb0 range.
-	CALLF: "CALLF",
-	RETF:  "RETF",
+	// 0xe0 range.
+	RJUMP:  "RJUMP",
+	RJUMPI: "RJUMPI",
+	RJUMPV: "RJUMPV",
+	CALLF:  "CALLF",
+	RETF:   "RETF",
+	JUMPF:  "JUMPF",
 
 	// 0xf0 range - closures.
 	CREATE:       "CREATE",

@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -332,11 +333,22 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		undefined:   true,
 	}
+	jt[CALL] = undefined
 	jt[CALLCODE] = undefined
+	jt[DELEGATECALL] = undefined
+	jt[STATICCALL] = undefined
 	jt[SELFDESTRUCT] = undefined
 	jt[JUMP] = undefined
 	jt[JUMPI] = undefined
 	jt[PC] = undefined
+	jt[CREATE] = undefined
+	jt[CREATE2] = undefined
+	jt[CODESIZE] = undefined
+	jt[CODECOPY] = undefined
+	jt[EXTCODESIZE] = undefined
+	jt[EXTCODECOPY] = undefined
+	jt[EXTCODEHASH] = undefined
+	jt[GAS] = undefined
 
 	// New opcodes
 	jt[RJUMP] = &operation{
@@ -371,6 +383,36 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		terminal:    true,
 	}
+	jt[JUMPF] = &operation{
+		execute:     opJumpf,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+}
+
+func opExtCodeCopyEOF(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack      = scope.Stack
+		a          = stack.pop()
+		memOffset  = stack.pop()
+		codeOffset = stack.pop()
+		length     = stack.pop()
+	)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = math.MaxUint64
+	}
+	addr := common.Address(a.Bytes20())
+	code := interpreter.evm.StateDB.GetCode(addr)
+	// Check if we're copying an EOF contract
+	if len(code) >= 2 && code[0] == 0xEF && code[1] == 0x00 {
+		code = []byte{0xEF, 0x00}
+	}
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+
+	return nil, nil
 }
 
 // opRjump implements the rjump opcode.
@@ -450,5 +492,23 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	if len(scope.ReturnStack) == 0 {
 		return nil, errStopToken
 	}
+	return nil, nil
+}
+
+func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code = scope.Contract.CodeAt(scope.CodeSection)
+		idx  = binary.BigEndian.Uint16(code[*pc+1:])
+		typ  = scope.Contract.Container.Types[idx]
+	)
+	if scope.Stack.len()+int(typ.MaxStackHeight)-int(typ.Input) > 1024 {
+		return nil, fmt.Errorf("stack overflow")
+	}
+	scope.CodeSection = uint64(idx)
+	*pc = 0
+	return nil, nil
+}
+
+func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
