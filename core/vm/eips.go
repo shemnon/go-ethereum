@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -510,5 +511,44 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		code              = scope.Contract.CodeAt(scope.CodeSection)
+		idx               = binary.BigEndian.Uint16(code[*pc+1:])
+		typ               = scope.Contract.Container.Types[idx]
+		value             = scope.Stack.pop()
+		salt              = scope.Stack.pop()
+		offset, size      = scope.Stack.pop(), scope.Stack.pop()
+		input             = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		initContainerSize = uint64(0)
+	)
+	// deduct hashing charge
+	hashingGas := 6 * ((initContainerSize + 31) / 32)
+	scope.Contract.UseGas(hashingGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, gas, &value)
+	// Push item on the stack based on the returned error. If the ruleset is
+	// homestead we must check for CodeStoreOutOfGasError (homestead only
+	// rule) and treat as an error, if the ruleset is frontier we must
+	// ignore this error and pretend the operation was successful.
+	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
+		stackvalue.Clear()
+	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+		stackvalue.Clear()
+	} else {
+		stackvalue.SetBytes(addr.Bytes())
+	}
+	scope.Stack.push(&stackvalue)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	if suberr == ErrExecutionReverted {
+		interpreter.returnData = res // set REVERT data to return data buffer
+		return res, nil
+	}
+	interpreter.returnData = nil // clear dirty return data buffer
+	return nil, nil
 	return nil, nil
 }
