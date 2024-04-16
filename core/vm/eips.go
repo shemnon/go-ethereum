@@ -715,3 +715,88 @@ func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	scope.Stack.push(offset.SetBytes(interpreter.returnData[offset.Uint64() : offset.Uint64()+32]))
 	return nil, nil
 }
+
+func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, value, inOffset, inSize := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get the arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	if interpreter.readOnly && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
+	if !value.IsZero() {
+		gas += params.CallStipend
+	}
+	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
+}
+
+func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
+}
+
+func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
+}
