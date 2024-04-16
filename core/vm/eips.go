@@ -515,27 +515,23 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return nil, ErrWriteProtection
 	}
 	var (
-		code              = scope.Contract.CodeAt(scope.CodeSection)
-		idx               = binary.BigEndian.Uint16(code[*pc+1:])
-		typ               = scope.Contract.Container.Types[idx]
-		value             = scope.Stack.pop()
-		salt              = scope.Stack.pop()
-		offset, size      = scope.Stack.pop(), scope.Stack.pop()
-		input             = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		initContainerSize = uint64(0)
+		code         = scope.Contract.CodeAt(scope.CodeSection)
+		idx          = binary.BigEndian.Uint16(code[*pc+1:])
+		subcontainer = scope.Contract.Container.ContainerSections[idx]
+		value        = scope.Stack.pop()
+		salt         = scope.Stack.pop()
+		offset, size = scope.Stack.pop(), scope.Stack.pop()
+		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		gas          = scope.Contract.Gas
 	)
-	// deduct hashing charge
-	hashingGas := 6 * ((initContainerSize + 31) / 32)
-	scope.Contract.UseGas(hashingGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+	// Reuse last popped value from stack
+	stackvalue := size
+	// Apply EIP150
+	gas -= gas / 64
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, gas, &value)
-	// Push item on the stack based on the returned error. If the ruleset is
-	// homestead we must check for CodeStoreOutOfGasError (homestead only
-	// rule) and treat as an error, if the ruleset is frontier we must
-	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
-		stackvalue.Clear()
-	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer, gas, &value, &salt)
+	if suberr != nil {
 		stackvalue.Clear()
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
@@ -549,6 +545,5 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return res, nil
 	}
 	interpreter.returnData = nil // clear dirty return data buffer
-	return nil, nil
 	return nil, nil
 }
