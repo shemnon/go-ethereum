@@ -89,6 +89,7 @@ type TxContext struct {
 	GasPrice   *big.Int       // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
 	BlobHashes []common.Hash  // Provides information for BLOBHASH
 	BlobFeeCap *big.Int       // Is used to zero the blobbasefee if NoBaseFee is set
+	InitCodes  [][]byte       // Provides information for TXCREATE
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -569,8 +570,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) EOFCreate(caller ContractRef, code []byte, subcontainer []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: subcontainer}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, true)
 }
 
 // ChainConfig returns the environment's chain configuration

@@ -42,8 +42,9 @@ type ScopeContext struct {
 	Stack    *Stack
 	Contract *Contract
 
-	CodeSection uint64
-	ReturnStack []*ReturnContext
+	CodeSection  uint64
+	ReturnStack  []*ReturnContext
+	InitCodeMode bool
 }
 
 type ReturnContext struct {
