@@ -706,5 +706,12 @@ func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 }
 
 func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		offset = scope.Stack.pop()
+	)
+	if offset.Uint64()+32 > uint64(len(interpreter.returnData)) {
+		return nil, errors.New("return buffer overflow")
+	}
+	scope.Stack.push(offset.SetBytes(interpreter.returnData[offset.Uint64() : offset.Uint64()+32]))
 	return nil, nil
 }
