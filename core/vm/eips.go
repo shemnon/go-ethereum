@@ -617,29 +617,39 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 }
 
 func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	stackItem := scope.Stack.pop()
-	offset, overflow := stackItem.Uint64WithOverflow()
-	if length := uint64(len(scope.Contract.Container.Data)); overflow || length < offset {
+	var (
+		stackItem        = scope.Stack.pop()
+		offset, overflow = stackItem.Uint64WithOverflow()
+		length           = uint64(len(scope.Contract.Container.Data))
+		end              = min(length, offset+32)
+	)
+
+	if overflow {
 		stackItem.Clear()
+		scope.Stack.push(&stackItem)
 	} else {
-		stackItem.SetBytes(append(scope.Contract.Container.Data, make([]byte, 32)...)[offset : offset+32])
+		scope.Stack.push(stackItem.SetBytes(
+			common.RightPadBytes(
+				scope.Contract.Code[offset:end],
+				32,
+			)),
+		)
 	}
-	scope.Stack.push(&stackItem)
 	return nil, nil
 }
 
 func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code      = scope.Contract.CodeAt(scope.CodeSection)
-		offset    = binary.BigEndian.Uint16(code[*pc+1:])
-		stackItem = new(uint256.Int)
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		offset = int(binary.BigEndian.Uint16(code[*pc+1:]))
+		end    = min(len(code), offset+32)
 	)
-	if length := uint64(len(scope.Contract.Container.Data)); length < uint64(offset) {
-		stackItem.Clear()
-	} else {
-		stackItem.SetBytes(append(scope.Contract.Container.Data, make([]byte, 32)...)[offset : offset+32])
-	}
-	scope.Stack.push(stackItem)
+	scope.Stack.push(new(uint256.Int).SetBytes(
+		common.RightPadBytes(
+			scope.Contract.Code[offset:end],
+			32,
+		)),
+	)
 	return nil, nil
 }
 
@@ -655,17 +665,13 @@ func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		memOffset = scope.Stack.pop()
 		offset    = scope.Stack.pop()
 		size      = scope.Stack.pop()
+		data      = scope.Contract.Container.Data
+		end       = min(uint64(len(data)), offset.Uint64()+size.Uint64())
 	)
 	// These values are checked for overflow during memory expansion calculation
 	// (the memorySize function on the opcode).
-	data := make([]byte, size.Uint64())
-	if length := uint64(len(scope.Contract.Container.Data)); length < offset.Uint64() {
-		// invalid offset, copy empty slice
-	} else if length < offset.Uint64()+size.Uint64() {
-		copy(data, scope.Contract.Container.Data[offset.Uint64():])
-	} else {
-		copy(data, scope.Contract.Container.Data[offset.Uint64():offset.Uint64()+size.Uint64()])
-	}
+	result := make([]byte, size.Uint64())
+	copy(result, data[offset.Uint64():end])
 	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
 	return nil, nil
 }
@@ -689,5 +695,16 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+		n     = index>>4 + 1
+		m     = index%0x0F + 1
+	)
+	scope.Stack.swapN(n, m)
+	return nil, nil
+}
+
+func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	return nil, nil
 }
