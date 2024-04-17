@@ -39,7 +39,7 @@ const (
 	eof1Version   = 1
 
 	maxInputItems        = 127
-	maxOutputItems       = 127
+	maxOutputItems       = 128
 	maxStackHeight       = 1023
 	maxContainerSections = 256
 )
@@ -57,7 +57,7 @@ var (
 	ErrMissingTerminator           = errors.New("missing header terminator")
 	ErrTooManyInputs               = errors.New("invalid type content, too many inputs")
 	ErrTooManyOutputs              = errors.New("invalid type content, too many inputs")
-	ErrInvalidSection0Type         = errors.New("invalid section 0 type, input and output should be zero")
+	ErrInvalidSection0Type         = errors.New("invalid section 0 type, input and output should be zero and non-returning (0x80)")
 	ErrTooLargeMaxStackHeight      = errors.New("invalid type content, max stack height exceeds limit")
 	ErrInvalidContainerSize        = errors.New("invalid container size")
 )
@@ -244,7 +244,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		}
 		types = append(types, sig)
 	}
-	if types[0].Input != 0 || types[0].Output != 0 {
+	if types[0].Input != 0 || types[0].Output != 0x80 {
 		return fmt.Errorf("%w: have %d, %d", ErrInvalidSection0Type, types[0].Input, types[0].Output)
 	}
 	c.Types = types
@@ -390,14 +390,14 @@ func (c *Container) String() string {
 	result += "Body\n"
 	result += "-----------\n"
 	for i, typ := range c.Types {
-		result += fmt.Sprintf("Type %v: %v", i, hex.EncodeToString([]byte{typ.Input, typ.Output, byte(typ.MaxStackHeight >> 8), byte(typ.MaxStackHeight & 0x00ff)}))
+		result += fmt.Sprintf("Type %v: %v\n", i, hex.EncodeToString([]byte{typ.Input, typ.Output, byte(typ.MaxStackHeight >> 8), byte(typ.MaxStackHeight & 0x00ff)}))
 	}
 	for i, code := range c.Code {
-		result += fmt.Sprintf("Code %v: %v", i, hex.EncodeToString(code))
+		result += fmt.Sprintf("Code %v: %v\n", i, hex.EncodeToString(code))
 	}
 	for i, section := range c.ContainerSections {
 		result += fmt.Sprintf("Section %v: %v", i, hex.EncodeToString(section))
 	}
-	result += fmt.Sprintf("Data: %v", hex.EncodeToString(c.Data))
+	result += fmt.Sprintf("Data: %v\n", hex.EncodeToString(c.Data))
 	return result
 }
