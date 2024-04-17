@@ -411,6 +411,7 @@ func enableEOF(jt *JumpTable) {
 	jt[RETURNCONTRACT] = &operation{
 		execute:     opReturnContract,
 		constantGas: GasZeroStep,
+		dynamicGas:  memoryCopierGas(2),
 		minStack:    minStack(2, 0),
 		maxStack:    maxStack(2, 0),
 		memorySize:  memoryEOFCreate,
@@ -436,6 +437,7 @@ func enableEOF(jt *JumpTable) {
 	jt[DATACOPY] = &operation{
 		execute:     opDataCopy,
 		constantGas: GasFastestStep,
+		dynamicGas:  memoryCopierGas(3),
 		minStack:    minStack(3, 0),
 		maxStack:    maxStack(3, 0),
 		memorySize:  memoryMcopy,

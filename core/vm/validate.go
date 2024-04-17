@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	ErrUndefinedInstruction   = errors.New("undefined instrustion")
+	ErrUndefinedInstruction   = errors.New("undefined instruction")
 	ErrTruncatedImmediate     = errors.New("truncated immediate")
 	ErrInvalidSectionArgument = errors.New("invalid section argument")
 	ErrInvalidJumpDest        = errors.New("invalid jump destination")
