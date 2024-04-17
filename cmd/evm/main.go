@@ -279,6 +279,7 @@ func init() {
 		transactionCommand,
 		blockBuilderCommand,
 		eofParserCommand,
+		eofDumpCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
