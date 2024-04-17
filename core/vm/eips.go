@@ -392,6 +392,102 @@ func enableEOF(jt *JumpTable) {
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 	}
+	jt[EOFCREATE] = &operation{
+		execute:     opEOFCreate,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasEOFCreate,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryEOFCreate,
+	}
+	jt[TXCREATE] = &operation{
+		execute:     opTXCreate,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasEOFCreate,
+		minStack:    minStack(5, 1),
+		maxStack:    maxStack(5, 1),
+		memorySize:  memoryEOFCreate,
+	}
+	jt[RETURNCONTRACT] = &operation{
+		execute:     opReturnContract,
+		constantGas: GasZeroStep,
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(2, 0),
+		memorySize:  memoryEOFCreate,
+	}
+	jt[DATALOAD] = &operation{
+		execute:     opDataLoad,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[DATALOADN] = &operation{
+		execute:     opDataLoadN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[DATASIZE] = &operation{
+		execute:     opDataSize,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[DATACOPY] = &operation{
+		execute:     opDataCopy,
+		constantGas: GasFastestStep,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryMcopy,
+	}
+	jt[DUPN] = &operation{
+		execute:     opDupN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[SWAPN] = &operation{
+		execute:     opSwapN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[EXCHANGE] = &operation{
+		execute:     opExchange,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[RETURNDATALOAD] = &operation{
+		execute:     opExchange,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[EXTCALL] = &operation{
+		execute:     opExtCall,
+		constantGas: params.CallGasEIP150,
+		dynamicGas:  gasCall,
+		minStack:    minStack(6, 1),
+		maxStack:    maxStack(6, 1),
+		memorySize:  memoryCall,
+	}
+	jt[EXTDELEGATECALL] = &operation{
+		execute:     opExtDelegateCall,
+		dynamicGas:  gasDelegateCall,
+		constantGas: params.CallGasEIP150,
+		minStack:    minStack(5, 1),
+		maxStack:    maxStack(5, 1),
+		memorySize:  memoryDelegateCall,
+	}
+	jt[STATICCALL] = &operation{
+		execute:     opExtStaticCall,
+		constantGas: params.CallGasEIP150,
+		dynamicGas:  gasStaticCall,
+		minStack:    minStack(5, 1),
+		maxStack:    maxStack(5, 1),
+		memorySize:  memoryStaticCall,
+	}
 }
 
 func opExtCodeCopyEOF(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
