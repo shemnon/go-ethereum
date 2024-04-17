@@ -161,3 +161,24 @@ func parseAndValidate(s string) (*vm.Container, error) {
 	}
 	return &c, nil
 }
+
+func eofDump(ctx *cli.Context) error {
+	// If `--hex` is set, parse and validate the hex string argument.
+	if ctx.IsSet(HexFlag.Name) {
+		s := ctx.String(HexFlag.Name)
+		if len(s) >= 2 && strings.HasPrefix(s, "0x") {
+			s = s[2:]
+		}
+		b, err := hex.DecodeString(s)
+		if err != nil {
+			return fmt.Errorf("unable to decode data: %w", err)
+		}
+		var c vm.Container
+		if err := c.UnmarshalBinary(b); err != nil {
+			return err
+		}
+		fmt.Print(c.String())
+		return nil
+	}
+	return nil
+}

@@ -256,6 +256,15 @@ var eofParserCommand = &cli.Command{
 	},
 }
 
+var eofDumpCommand = &cli.Command{
+	Name:   "eofdump",
+	Usage:  "parses hex eof container",
+	Action: eofDump,
+	Flags: []cli.Flag{
+		HexFlag,
+	},
+}
+
 var app = flags.NewApp("the evm command line interface")
 
 func init() {

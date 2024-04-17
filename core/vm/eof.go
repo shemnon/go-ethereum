@@ -19,6 +19,7 @@ package vm
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -360,4 +361,43 @@ func sum(list []int) (s int) {
 		s += n
 	}
 	return
+}
+
+func (c *Container) String() string {
+	var result string
+	result += "Header\n"
+	result += "-----------\n"
+	result += fmt.Sprintf("EOFMagic: %v\n", eofMagic)
+	result += fmt.Sprintf("EOFVersion: %v\n", eof1Version)
+	result += fmt.Sprintf("KindType: %v\n", kindTypes)
+	result += fmt.Sprintf("TypesSize: %v\n", len(c.Types)*4)
+	result += fmt.Sprintf("KindCode: %v\n", kindCode)
+	result += fmt.Sprintf("CodeSize: %v\n", len(c.Code))
+	for i, code := range c.Code {
+		result += fmt.Sprintf("Code %v length: %v\n", i, len(code))
+	}
+	if len(c.ContainerSections) != 0 {
+		result += fmt.Sprintf("KindContainer: %v\n", kindContainer)
+		result += fmt.Sprintf("ContainerSize: %v\n", len(c.ContainerSections))
+		for i, section := range c.ContainerSections {
+			result += fmt.Sprintf("Container %v length: %v\n", i, len(section))
+		}
+	}
+	result += fmt.Sprintf("KindData: %v\n", kindData)
+	result += fmt.Sprintf("DataSize: %v\n", len(c.Data))
+	result += fmt.Sprintf("Terminator: %v\n", 0x0)
+	result += "-----------\n"
+	result += "Body\n"
+	result += "-----------\n"
+	for i, typ := range c.Types {
+		result += fmt.Sprintf("Type %v: %v", i, hex.EncodeToString([]byte{typ.Input, typ.Output, byte(typ.MaxStackHeight >> 8), byte(typ.MaxStackHeight & 0x00ff)}))
+	}
+	for i, code := range c.Code {
+		result += fmt.Sprintf("Code %v: %v", i, hex.EncodeToString(code))
+	}
+	for i, section := range c.ContainerSections {
+		result += fmt.Sprintf("Section %v: %v", i, hex.EncodeToString(section))
+	}
+	result += fmt.Sprintf("Data: %v", hex.EncodeToString(c.Data))
+	return result
 }
