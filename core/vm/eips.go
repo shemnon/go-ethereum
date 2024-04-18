@@ -759,6 +759,7 @@ func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 			32,
 		)),
 	)
+	*pc += 2
 	return nil, nil
 }
 
@@ -791,6 +792,7 @@ func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		index = int(code[*pc+1]) + 1
 	)
 	scope.Stack.dup(index)
+	*pc += 1
 	return nil, nil
 }
 
@@ -800,6 +802,7 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		index = int(code[*pc+1]) + 1
 	)
 	scope.Stack.swap(index)
+	*pc += 1
 	return nil, nil
 }
 
@@ -811,6 +814,7 @@ func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		m     = index%0x0F + 1
 	)
 	scope.Stack.swapN(n, m)
+	*pc += 1
 	return nil, nil
 }
 
