@@ -4367,7 +4367,7 @@ func TestEOF(t *testing.T) {
 				aa: {
 					Code: (&vm.Container{
 						Types: []*vm.FunctionMetadata{
-							{Input: 0, Output: 0, MaxStackHeight: 0},
+							{Input: 0, Output: 0x80, MaxStackHeight: 0},
 							{Input: 0, Output: 0, MaxStackHeight: 2},
 							{Input: 0, Output: 0, MaxStackHeight: 0},
 							{Input: 0, Output: 0, MaxStackHeight: 2},
@@ -4457,7 +4457,7 @@ func TestEOF(t *testing.T) {
 	signer := types.LatestSigner(gspec.Config)
 
 	container := vm.Container{
-		Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+		Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
 		Code:  [][]byte{{byte(vm.STOP)}},
 		Data:  nil,
 	}
@@ -4514,7 +4514,7 @@ func TestEOF(t *testing.T) {
 
 		// 2: invalid initcode in create tx, should be valid and use all gas
 		invalid := (&vm.Container{
-			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
 			Code:  [][]byte{common.Hex2Bytes("604200")},
 			Data:  []byte{0x01, 0x02, 0x03},
 		}).MarshalBinary()
@@ -4535,7 +4535,7 @@ func TestEOF(t *testing.T) {
 
 		// 3: invalid deployed eof in create tx, should be valid and use all gas
 		inner := (&vm.Container{
-			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 0}},
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
 			Code:  [][]byte{common.Hex2Bytes("0000")},
 		}).MarshalBinary()
 		invalid = makeDeployCode(inner)

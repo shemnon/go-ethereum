@@ -58,47 +58,36 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		if jt[op].undefined {
 			return fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
 		}
-		switch {
-		case op >= PUSH1 && op <= PUSH32:
-			size := int(op - PUSH0)
+		if size := jt[op].immediate; size != 0 {
 			if len(code) <= i+size {
 				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
 			}
-			i += size
-		case op == RJUMP || op == RJUMPI:
-			if len(code) <= i+2 {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
-				return err
-			}
-			i += 2
-		case op == RJUMPV:
-			if len(code) <= i+1 {
-				return fmt.Errorf("%w: jump table size missing, op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			count := int(code[i+1])
-			if count == 0 {
-				return fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
-			}
-			if len(code) <= i+count {
-				return fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			for j := 0; j < count; j++ {
-				if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
+			switch {
+			case op == RJUMP || op == RJUMPI:
+				if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
 					return err
 				}
+			case op == RJUMPV:
+				count := int(code[i+1])
+				if count == 0 {
+					return fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
+				}
+				if len(code) <= i+count {
+					return fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
+				}
+				for j := 0; j < count; j++ {
+					if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
+						return err
+					}
+				}
+				i += 2 * count
+			case op == CALLF:
+				arg, _ := parseUint16(code[i+1:])
+				if arg >= len(metadata) {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(metadata), i)
+				}
 			}
-			i += 1 + 2*count
-		case op == CALLF:
-			if i+2 >= len(code) {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			arg, _ := parseUint16(code[i+1:])
-			if arg >= len(metadata) {
-				return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(metadata), i)
-			}
-			i += 2
+			i += size
 		}
 		i += 1
 	}

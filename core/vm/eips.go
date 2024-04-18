@@ -360,24 +360,28 @@ func enableEOF(jt *JumpTable) {
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		terminal:    true,
+		immediate:   2,
 	}
 	jt[RJUMPI] = &operation{
 		execute:     opRjumpi,
 		constantGas: GasFastishStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
+		immediate:   2,
 	}
 	jt[RJUMPV] = &operation{
 		execute:     opRjumpv,
 		constantGas: GasFastishStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
+		immediate:   1, // at least 1, maybe more
 	}
 	jt[CALLF] = &operation{
 		execute:     opCallf,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
+		immediate:   2,
 	}
 	jt[RETF] = &operation{
 		execute:     opRetf,
@@ -391,6 +395,7 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
+		immediate:   2,
 	}
 	jt[EOFCREATE] = &operation{
 		execute:     opEOFCreate,
@@ -399,6 +404,7 @@ func enableEOF(jt *JumpTable) {
 		minStack:    minStack(4, 1),
 		maxStack:    maxStack(4, 1),
 		memorySize:  memoryEOFCreate,
+		immediate:   1,
 	}
 	jt[TXCREATE] = &operation{
 		execute:     opTXCreate,
@@ -415,6 +421,7 @@ func enableEOF(jt *JumpTable) {
 		minStack:    minStack(2, 0),
 		maxStack:    maxStack(2, 0),
 		memorySize:  memoryEOFCreate,
+		immediate:   1,
 	}
 	jt[DATALOAD] = &operation{
 		execute:     opDataLoad,
@@ -427,6 +434,7 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
+		immediate:   2,
 	}
 	jt[DATASIZE] = &operation{
 		execute:     opDataSize,
@@ -447,18 +455,21 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 1),
 		maxStack:    maxStack(0, 1),
+		immediate:   1,
 	}
 	jt[SWAPN] = &operation{
 		execute:     opSwapN,
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
+		immediate:   1,
 	}
 	jt[EXCHANGE] = &operation{
 		execute:     opExchange,
 		constantGas: GasFastestStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
+		immediate:   1,
 	}
 	jt[RETURNDATALOAD] = &operation{
 		execute:     opExchange,
