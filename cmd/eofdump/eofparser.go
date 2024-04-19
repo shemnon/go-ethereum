@@ -23,7 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -64,14 +66,18 @@ var (
 	}
 )
 
+type RefTests struct {
+	Vectors map[string]EOFTest `json:"vectors"`
+}
+
 type EOFTest struct {
 	Code    string              `json:"code"`
 	Results map[string]etResult `json:"results"`
 }
 
 type etResult struct {
-	Result    bool `json:"result"`
-	Exception int  `json:"exception,omitempty"`
+	Result    bool   `json:"result"`
+	Exception string `json:"exception,omitempty"`
 }
 
 func eofParser(ctx *cli.Context) error {
@@ -89,41 +95,32 @@ func eofParser(ctx *cli.Context) error {
 
 	// If `--test` is set, parse and validate the reference test at the provided path.
 	if ctx.IsSet(RefTestFlag.Name) {
-		src, err := os.ReadFile(ctx.String(RefTestFlag.Name))
-		if err != nil {
+		file := ctx.String(RefTestFlag.Name)
+		if info, err := os.Stat(file); err != nil {
 			return err
-		}
-		var tests map[string]EOFTest
-		if err = json.Unmarshal(src, &tests); err != nil {
-			return err
-		}
-		passed, total := 0, 0
-		for name, tt := range tests {
-			for fork, r := range tt.Results {
-				total++
-				// TODO(matt): all tests currently run against
-				// shanghai EOF, add support for custom forks.
-				_, err := parseAndValidate(tt.Code)
-				if err2 := errors.Unwrap(err); err2 != nil {
-					err = err2
-				}
-				if r.Result && err != nil {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected success, got %v\n", name, fork, err)
-					continue
-				}
-				if !r.Result && err == nil {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got %v\n", name, fork, r.Exception, err)
-					continue
-				}
-				if !r.Result && err != nil && r.Exception != errorMap[err.Error()] {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got: err(%d): %v\n", name, fork, r.Exception, errorMap[err.Error()], err)
-					continue
-				}
-				passed++
+		} else if !info.IsDir() {
+			src, err := os.ReadFile(file)
+			if err != nil {
+				return err
 			}
+			return ExecuteTest(src)
+		} else {
+			return filepath.Walk(file, func(path string, info fs.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if info.IsDir() {
+					return nil
+				}
+				fmt.Printf("Executing Tests: %v\n", info.Name())
+				src, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				return ExecuteTest(src)
+			})
 		}
-		fmt.Printf("%d/%d tests passed.\n", passed, total)
-		return nil
+
 	}
 
 	// If neither are passed in, read input from stdin.
@@ -141,6 +138,45 @@ func eofParser(ctx *cli.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func ExecuteTest(src []byte) error {
+	var testsByName map[string]RefTests
+	if err := json.Unmarshal(src, &testsByName); err != nil {
+		return err
+	}
+	passed, total := 0, 0
+	for _, tests := range testsByName {
+		for name, tt := range tests.Vectors {
+			for fork, r := range tt.Results {
+				total++
+				// TODO(matt): all tests currently run against
+				// shanghai EOF, add support for custom forks.
+				_, err := parseAndValidate(tt.Code)
+				if err2 := errors.Unwrap(err); err2 != nil {
+					err = err2
+				}
+				if r.Result && err != nil {
+					fmt.Fprintf(os.Stderr, "%s, %s: expected success, got %v\n", name, fork, err)
+					continue
+				}
+				if !r.Result && err == nil {
+					fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got %v\n", name, fork, r.Exception, err)
+					continue
+				}
+				/*
+					// TODO (MariusVanDerWijden) reenable once tests have a decent error format
+					if !r.Result && err != nil && r.Exception != err.Error() {
+						fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got: err(%d): %v\n", name, fork, r.Exception, errorMap[err.Error()], err)
+						continue
+					}
+				*/
+				passed++
+			}
+		}
+	}
+	fmt.Printf("%d/%d tests passed.\n", passed, total)
 	return nil
 }
 
