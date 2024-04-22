@@ -678,7 +678,7 @@ func newFrontierInstructionSet() JumpTable {
 			constantGas: GasFastestStep,
 			minStack:    minStack(0, 1),
 			maxStack:    maxStack(0, 1),
-			immediate:   8,
+			immediate:   9,
 		},
 		PUSH10: {
 			execute:     makePush(10, 10),

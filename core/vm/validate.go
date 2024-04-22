@@ -23,20 +23,21 @@ import (
 )
 
 var (
-	ErrUndefinedInstruction   = errors.New("undefined instruction")
-	ErrTruncatedImmediate     = errors.New("truncated immediate")
-	ErrInvalidSectionArgument = errors.New("invalid section argument")
-	ErrInvalidJumpDest        = errors.New("invalid jump destination")
-	ErrConflictingStack       = errors.New("conflicting stack height")
-	ErrInvalidBranchCount     = errors.New("invalid number of branches in jump table")
-	ErrInvalidOutputs         = errors.New("invalid number of outputs")
-	ErrInvalidMaxStackHeight  = errors.New("invalid max stack height")
-	ErrInvalidCodeTermination = errors.New("invalid code termination")
-	ErrUnreachableCode        = errors.New("unreachable code")
+	ErrUndefinedInstruction     = errors.New("undefined instruction")
+	ErrTruncatedImmediate       = errors.New("truncated immediate")
+	ErrInvalidSectionArgument   = errors.New("invalid section argument")
+	ErrInvalidDataloadNArgument = errors.New("invalid dataloadN argument")
+	ErrInvalidJumpDest          = errors.New("invalid jump destination")
+	ErrConflictingStack         = errors.New("conflicting stack height")
+	ErrInvalidBranchCount       = errors.New("invalid number of branches in jump table")
+	ErrInvalidOutputs           = errors.New("invalid number of outputs")
+	ErrInvalidMaxStackHeight    = errors.New("invalid max stack height")
+	ErrInvalidCodeTermination   = errors.New("invalid code termination")
+	ErrUnreachableCode          = errors.New("unreachable code")
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
-func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) error {
+func validateCode(code []byte, section int, metadata []*FunctionMetadata, dataLen int, jt *JumpTable) error {
 	var (
 		i = 0
 		// Tracks the number of actual instructions in the code (e.g.
@@ -86,6 +87,11 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 				if arg >= len(metadata) {
 					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(metadata), i)
 				}
+			case op == DATALOADN:
+				arg, _ := parseUint16(code[i+1:])
+				if arg+32 > dataLen {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(metadata), i)
+				}
 			}
 			i += size
 		}
@@ -99,6 +105,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
 		return err
 	} else if paths != count {
+		fmt.Printf("Paths: %v Count: %v\n", paths, count)
 		// TODO(matt): return actual position of unreachable code
 		return ErrUnreachableCode
 	}
@@ -199,8 +206,8 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				}
 				pos += 2 + 2*count
 			default:
-				if op >= PUSH1 && op <= PUSH32 {
-					pos += 1 + int(op-PUSH0)
+				if jt[op].immediate != 0 {
+					pos += jt[op].immediate + 1
 				} else if jt[op].terminal {
 					break outer
 				} else {

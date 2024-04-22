@@ -503,7 +503,7 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(5, 1),
 		memorySize:  memoryDelegateCall,
 	}
-	jt[STATICCALL] = &operation{
+	jt[EXTSTATICCALL] = &operation{
 		execute:     opExtStaticCall,
 		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasStaticCall,

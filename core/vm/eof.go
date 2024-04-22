@@ -184,20 +184,18 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("%w: mismatch of code sections cound and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
 	}
 
-	// Parse container section header.
+	// Parse (optional) container section header.
+	var containerSizes []int
 	offset := offsetCodeKind + 2 + 2*len(codeSizes) + 1
-	kind, containerSizes, err := parseSectionList(b, offset)
-	if err != nil {
-		return err
-	}
-	// The container section is optional, only unmarshal if container section is set.
-	if kind == kindContainer {
+	if offset < len(b) && b[offset] == kindContainer {
+		kind, containerSizes, err = parseSectionList(b, offset)
+		if err != nil {
+			return err
+		}
+		if kind != kindContainer {
+			panic("somethings wrong")
+		}
 		offset = offset + 2 + 2*len(containerSizes) + 1
-	} else {
-		// empty out falsly parsed container sizes
-		// TODO (MariusVanDerWijden): clean this up, read the kind first before parsing the section list
-		// and if the kind is not KindContainer, just ignore it.
-		containerSizes = make([]int, 0)
 	}
 
 	// Parse data section header.
@@ -212,7 +210,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	// Check for terminator.
 	offsetTerminator := offset + 3
 	if len(b) < offsetTerminator {
-		return io.ErrUnexpectedEOF
+		return fmt.Errorf("%w: invalid offset terminator", io.ErrUnexpectedEOF)
 	}
 	if b[offsetTerminator] != 0 {
 		return fmt.Errorf("%w: have %x", ErrMissingTerminator, b[offsetTerminator])
@@ -294,7 +292,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 // rule set.
 func (c *Container) ValidateCode(jt *JumpTable) error {
 	for i, code := range c.Code {
-		if err := validateCode(code, i, c.Types, jt); err != nil {
+		if err := validateCode(code, i, c.Types, len(c.Data), jt); err != nil {
 			return err
 		}
 	}
