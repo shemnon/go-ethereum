@@ -352,6 +352,14 @@ func enableEOF(jt *JumpTable) {
 	jt[EXTCODECOPY] = undefined
 	jt[EXTCODEHASH] = undefined
 	jt[GAS] = undefined
+	// Allow 0xFE to terminate sections
+	jt[INVALID] = &operation{
+		execute:     opUndefined,
+		constantGas: 0,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		terminal:    true,
+	}
 
 	// New opcodes
 	jt[RJUMP] = &operation{
@@ -396,6 +404,7 @@ func enableEOF(jt *JumpTable) {
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		immediate:   2,
+		terminal:    true,
 	}
 	jt[EOFCREATE] = &operation{
 		execute:     opEOFCreate,
@@ -422,6 +431,7 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(2, 0),
 		memorySize:  memoryEOFCreate,
 		immediate:   1,
+		terminal:    true,
 	}
 	jt[DATALOAD] = &operation{
 		execute:     opDataLoad,
@@ -641,7 +651,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	gas -= gas / 64
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer, gas, &value, &salt)
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer.MarshalBinary(), gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
 	} else {

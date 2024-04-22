@@ -99,7 +99,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
 		return err
 	} else if paths != count {
-		// TODO(matt): return actual position of unreacable code
+		// TODO(matt): return actual position of unreachable code
 		return ErrUnreachableCode
 	}
 	return nil

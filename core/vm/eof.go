@@ -84,7 +84,7 @@ func isEOFVersion1(code []byte) bool {
 type Container struct {
 	Types             []*FunctionMetadata
 	Code              [][]byte
-	ContainerSections [][]byte
+	ContainerSections []*Container
 	Data              []byte
 }
 
@@ -110,11 +110,14 @@ func (c *Container) MarshalBinary() []byte {
 	for _, code := range c.Code {
 		b = binary.BigEndian.AppendUint16(b, uint16(len(code)))
 	}
+	var encodedContainer [][]byte
 	if len(c.ContainerSections) != 0 {
 		b = append(b, kindContainer)
 		b = binary.BigEndian.AppendUint16(b, uint16(len(c.ContainerSections)))
 		for _, section := range c.ContainerSections {
-			b = binary.BigEndian.AppendUint16(b, uint16(len(section)))
+			encoded := section.MarshalBinary()
+			b = binary.BigEndian.AppendUint16(b, uint16(len(encoded)))
+			encodedContainer = append(encodedContainer, encoded)
 		}
 	}
 	b = append(b, kindData)
@@ -128,7 +131,7 @@ func (c *Container) MarshalBinary() []byte {
 	for _, code := range c.Code {
 		b = append(b, code...)
 	}
-	for _, section := range c.ContainerSections {
+	for _, section := range encodedContainer {
 		b = append(b, section...)
 	}
 	b = append(b, c.Data...)
@@ -266,12 +269,16 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		if len(containerSizes) > maxContainerSections {
 			return fmt.Errorf("%w number of container section exceed: %v: have %v", ErrInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
 		}
-		container := make([][]byte, len(containerSizes))
+		container := make([]*Container, 0, len(containerSizes))
 		for i, size := range containerSizes {
 			if size == 0 {
 				return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidContainerSectionSize, i)
 			}
-			container[i] = b[idx : idx+size]
+			c := new(Container)
+			if err := c.UnmarshalBinary(b[idx : idx+size]); err != nil {
+				return fmt.Errorf("%w for section %d", err, i)
+			}
+			container = append(container, c)
 			idx += size
 		}
 		c.ContainerSections = container
@@ -288,6 +295,11 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 func (c *Container) ValidateCode(jt *JumpTable) error {
 	for i, code := range c.Code {
 		if err := validateCode(code, i, c.Types, jt); err != nil {
+			return err
+		}
+	}
+	for _, container := range c.ContainerSections {
+		if err := container.ValidateCode(jt); err != nil {
 			return err
 		}
 	}
@@ -367,25 +379,25 @@ func (c *Container) String() string {
 	var result string
 	result += "Header\n"
 	result += "-----------\n"
-	result += fmt.Sprintf("EOFMagic: %v\n", eofMagic)
-	result += fmt.Sprintf("EOFVersion: %v\n", eof1Version)
-	result += fmt.Sprintf("KindType: %v\n", kindTypes)
-	result += fmt.Sprintf("TypesSize: %v\n", len(c.Types)*4)
-	result += fmt.Sprintf("KindCode: %v\n", kindCode)
-	result += fmt.Sprintf("CodeSize: %v\n", len(c.Code))
+	result += fmt.Sprintf("EOFMagic: %02x\n", eofMagic)
+	result += fmt.Sprintf("EOFVersion: %02x\n", eof1Version)
+	result += fmt.Sprintf("KindType: %02x\n", kindTypes)
+	result += fmt.Sprintf("TypesSize: %04x\n", len(c.Types)*4)
+	result += fmt.Sprintf("KindCode: %02x\n", kindCode)
+	result += fmt.Sprintf("CodeSize: %04x\n", len(c.Code))
 	for i, code := range c.Code {
-		result += fmt.Sprintf("Code %v length: %v\n", i, len(code))
+		result += fmt.Sprintf("Code %v length: %04x\n", i, len(code))
 	}
 	if len(c.ContainerSections) != 0 {
-		result += fmt.Sprintf("KindContainer: %v\n", kindContainer)
-		result += fmt.Sprintf("ContainerSize: %v\n", len(c.ContainerSections))
+		result += fmt.Sprintf("KindContainer: %02x\n", kindContainer)
+		result += fmt.Sprintf("ContainerSize: %04x\n", len(c.ContainerSections))
 		for i, section := range c.ContainerSections {
-			result += fmt.Sprintf("Container %v length: %v\n", i, len(section))
+			result += fmt.Sprintf("Container %v length: %04x\n", i, len(section.MarshalBinary()))
 		}
 	}
-	result += fmt.Sprintf("KindData: %v\n", kindData)
-	result += fmt.Sprintf("DataSize: %v\n", len(c.Data))
-	result += fmt.Sprintf("Terminator: %v\n", 0x0)
+	result += fmt.Sprintf("KindData: %02x\n", kindData)
+	result += fmt.Sprintf("DataSize: %04x\n", len(c.Data))
+	result += fmt.Sprintf("Terminator: %02x\n", 0x0)
 	result += "-----------\n"
 	result += "Body\n"
 	result += "-----------\n"
@@ -396,7 +408,7 @@ func (c *Container) String() string {
 		result += fmt.Sprintf("Code %v: %v\n", i, hex.EncodeToString(code))
 	}
 	for i, section := range c.ContainerSections {
-		result += fmt.Sprintf("Section %v: %v", i, hex.EncodeToString(section))
+		result += fmt.Sprintf("Section %v: %v\n", i, hex.EncodeToString(section.MarshalBinary()))
 	}
 	result += fmt.Sprintf("Data: %v\n", hex.EncodeToString(c.Data))
 	return result
