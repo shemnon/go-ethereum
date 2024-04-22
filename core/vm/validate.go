@@ -37,7 +37,7 @@ var (
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
-func validateCode(code []byte, section int, metadata []*FunctionMetadata, dataLen int, jt *JumpTable) error {
+func validateCode(code []byte, section int, container *Container, jt *JumpTable) error {
 	var (
 		i = 0
 		// Tracks the number of actual instructions in the code (e.g.
@@ -84,13 +84,18 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, dataLe
 				i += 2 * count
 			case op == CALLF:
 				arg, _ := parseUint16(code[i+1:])
-				if arg >= len(metadata) {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(metadata), i)
+				if arg >= len(container.Types) {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 				}
 			case op == DATALOADN:
 				arg, _ := parseUint16(code[i+1:])
-				if arg+32 > dataLen {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(metadata), i)
+				if arg+32 > len(container.Data) {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
+				}
+			case op == RETURNCONTRACT:
+				arg := int(code[i+1])
+				if arg >= len(container.ContainerSections) {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
 			}
 			i += size
@@ -102,7 +107,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, dataLe
 	if !jt[op].terminal {
 		return fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
-	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
+	if paths, err := validateControlFlow(code, section, container.Types, jt); err != nil {
 		return err
 	} else if paths != count {
 		fmt.Printf("Paths: %v Count: %v\n", paths, count)

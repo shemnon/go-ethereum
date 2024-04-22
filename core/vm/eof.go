@@ -292,7 +292,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 // rule set.
 func (c *Container) ValidateCode(jt *JumpTable) error {
 	for i, code := range c.Code {
-		if err := validateCode(code, i, c.Types, len(c.Data), jt); err != nil {
+		if err := validateCode(code, i, c, jt); err != nil {
 			return err
 		}
 	}
