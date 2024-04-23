@@ -293,9 +293,20 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 // ValidateCode validates each code section of the container against the EOF v1
 // rule set.
 func (c *Container) ValidateCode(jt *JumpTable) error {
+	visited := make(map[int]struct{})
+	visited[0] = struct{}{}
 	for i, code := range c.Code {
-		if err := validateCode(code, i, c, jt); err != nil {
+		// Make sure every code section is visited at least once.
+		if _, ok := visited[i]; i != 0 && !ok {
+			return ErrUnreachableCode
+		}
+		v, err := validateCode(code, i, c, jt)
+		if err != nil {
 			return err
+		}
+		// Mark all sections that can be visited from here.
+		for idx := range v {
+			visited[idx] = struct{}{}
 		}
 	}
 	for _, container := range c.ContainerSections {

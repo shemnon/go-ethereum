@@ -39,7 +39,7 @@ var (
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
-func validateCode(code []byte, section int, container *Container, jt *JumpTable) error {
+func validateCode(code []byte, section int, container *Container, jt *JumpTable) (map[int]struct{}, error) {
 	var (
 		i = 0
 		// Tracks the number of actual instructions in the code (e.g.
@@ -48,6 +48,7 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 		count    = 0
 		op       OpCode
 		analysis bitvec
+		visited  = make(map[int]struct{})
 	)
 	// This loop visits every single instruction and verifies:
 	// * if the instruction is valid for the given jump table.
@@ -59,57 +60,64 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 		count++
 		op = OpCode(code[i])
 		if jt[op].undefined {
-			return fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
+			return visited, fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
 		}
 		if size := jt[op].immediate; size != 0 {
 			if len(code) <= i+size {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
+				return visited, fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
 			}
 			switch {
 			case op == RJUMP || op == RJUMPI:
 				if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
-					return err
+					return visited, err
 				}
 			case op == RJUMPV:
 				count := int(code[i+1])
 				if count == 0 {
-					return fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
+					return visited, fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
 				}
 				if len(code) <= i+count {
-					return fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
+					return visited, fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
 				}
 				for j := 0; j < count; j++ {
 					if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
-						return err
+						return visited, err
 					}
 				}
 				i += 2 * count
 			case op == CALLF:
 				arg, _ := parseUint16(code[i+1:])
 				if arg >= len(container.Types) {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 				}
 				if container.Types[arg].Output == 0x80 {
-					return fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
+					return visited, fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
 				}
+				visited[arg] = struct{}{}
+			case op == JUMPF:
+				arg, _ := parseUint16(code[i+1:])
+				if arg >= len(container.Types) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+				}
+				visited[arg] = struct{}{}
 			case op == DATALOADN:
 				arg, _ := parseUint16(code[i+1:])
 				if arg+32 > len(container.Data) {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
 				}
 			case op == RETURNCONTRACT:
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
 			case op == EOFCREATE:
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
-					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
 				// TODO is this really correct???
 				if ct := container.ContainerSections[arg]; len(ct.Data) != container.DataSize {
-					return fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
+					return visited, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 				}
 			}
 			i += size
@@ -119,16 +127,16 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 	// Code sections may not "fall through" and require proper termination.
 	// Therefore, the last instruction must be considered terminal.
 	if !jt[op].terminal {
-		return fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
+		return visited, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
 	if paths, err := validateControlFlow(code, section, container.Types, jt); err != nil {
-		return err
+		return visited, err
 	} else if paths != count {
 		fmt.Printf("Paths: %v Count: %v\n", paths, count)
 		// TODO(matt): return actual position of unreachable code
-		return ErrUnreachableCode
+		return visited, ErrUnreachableCode
 	}
-	return nil
+	return visited, nil
 }
 
 // checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.

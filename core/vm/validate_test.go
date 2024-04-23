@@ -247,7 +247,7 @@ func TestValidateCode(t *testing.T) {
 			Data:              make([]byte, 0),
 			ContainerSections: make([]*Container, 0),
 		}
-		err := validateCode(test.code, test.section, container, &pragueEOFInstructionSet)
+		_, err := validateCode(test.code, test.section, container, &pragueEOFInstructionSet)
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
