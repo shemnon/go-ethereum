@@ -86,6 +86,7 @@ type Container struct {
 	Code              [][]byte
 	ContainerSections []*Container
 	Data              []byte
+	DataSize          int // might be less than len(Data)
 }
 
 // FunctionMetadata is an EOF function signature.
@@ -121,7 +122,7 @@ func (c *Container) MarshalBinary() []byte {
 		}
 	}
 	b = append(b, kindData)
-	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Data)))
+	b = binary.BigEndian.AppendUint16(b, uint16(c.DataSize))
 	b = append(b, 0) // terminator
 
 	// Write section contents.
@@ -206,6 +207,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	if kind != kindData {
 		return fmt.Errorf("%w: found section %x instead", ErrMissingDataHeader, kind)
 	}
+	c.DataSize = dataSize
 
 	// Check for terminator.
 	offsetTerminator := offset + 3
@@ -221,7 +223,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	if len(containerSizes) != 0 {
 		expectedSize += sum(containerSizes)
 	}
-	if len(b) != expectedSize {
+	if len(b) < expectedSize-dataSize || len(b) > expectedSize {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
 

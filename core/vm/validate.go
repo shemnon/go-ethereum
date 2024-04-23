@@ -23,17 +23,19 @@ import (
 )
 
 var (
-	ErrUndefinedInstruction     = errors.New("undefined instruction")
-	ErrTruncatedImmediate       = errors.New("truncated immediate")
-	ErrInvalidSectionArgument   = errors.New("invalid section argument")
-	ErrInvalidDataloadNArgument = errors.New("invalid dataloadN argument")
-	ErrInvalidJumpDest          = errors.New("invalid jump destination")
-	ErrConflictingStack         = errors.New("conflicting stack height")
-	ErrInvalidBranchCount       = errors.New("invalid number of branches in jump table")
-	ErrInvalidOutputs           = errors.New("invalid number of outputs")
-	ErrInvalidMaxStackHeight    = errors.New("invalid max stack height")
-	ErrInvalidCodeTermination   = errors.New("invalid code termination")
-	ErrUnreachableCode          = errors.New("unreachable code")
+	ErrUndefinedInstruction          = errors.New("undefined instruction")
+	ErrTruncatedImmediate            = errors.New("truncated immediate")
+	ErrInvalidSectionArgument        = errors.New("invalid section argument")
+	ErrInvalidCallArgument           = errors.New("callf into non-returning section")
+	ErrInvalidDataloadNArgument      = errors.New("invalid dataloadN argument")
+	ErrInvalidJumpDest               = errors.New("invalid jump destination")
+	ErrConflictingStack              = errors.New("conflicting stack height")
+	ErrInvalidBranchCount            = errors.New("invalid number of branches in jump table")
+	ErrInvalidOutputs                = errors.New("invalid number of outputs")
+	ErrInvalidMaxStackHeight         = errors.New("invalid max stack height")
+	ErrInvalidCodeTermination        = errors.New("invalid code termination")
+	ErrEOFCreateWithTruncatedSection = errors.New("eofcreate with truncated section")
+	ErrUnreachableCode               = errors.New("unreachable code")
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
@@ -87,6 +89,9 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 				if arg >= len(container.Types) {
 					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 				}
+				if container.Types[arg].Output == 0x80 {
+					return fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
+				}
 			case op == DATALOADN:
 				arg, _ := parseUint16(code[i+1:])
 				if arg+32 > len(container.Data) {
@@ -96,6 +101,15 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
 					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+				}
+			case op == EOFCREATE:
+				arg := int(code[i+1])
+				if arg >= len(container.ContainerSections) {
+					return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+				}
+				// TODO is this really correct???
+				if ct := container.ContainerSections[arg]; len(ct.Data) != container.DataSize {
+					return fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 				}
 			}
 			i += size
@@ -213,11 +227,12 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			default:
 				if jt[op].immediate != 0 {
 					pos += jt[op].immediate + 1
-				} else if jt[op].terminal {
-					break outer
 				} else {
 					// Simple op, no operand.
 					pos += 1
+				}
+				if jt[op].terminal {
+					break outer
 				}
 			}
 			maxStackHeight = max(maxStackHeight, height)
