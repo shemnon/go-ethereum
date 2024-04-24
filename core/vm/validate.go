@@ -234,6 +234,21 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 					worklist = append(worklist, item{pos: pos + 2 + 2*count + arg, height: height})
 				}
 				pos += 2 + 2*count
+			case op == DUPN:
+			case op == SWAPN:
+				arg := int(code[pos+1]) + 1
+				if want, have := arg, height; want >= have {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+				}
+				pos += 2
+			case op == EXCHANGE:
+				arg := int(code[pos+1])
+				n := arg>>4 + 1
+				m := arg&0x0f + 1
+				if want, have := n+m, height; want >= have {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+				}
+				pos += 2
 			default:
 				if jt[op].immediate != 0 {
 					pos += jt[op].immediate + 1
