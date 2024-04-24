@@ -205,14 +205,15 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			switch {
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
-				if want, have := int(metadata[arg].Input), height; want > have {
+				section := metadata[arg]
+				if want, have := int(section.Input), height; want > have {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
-				if have, limit := int(metadata[arg].Output)+height, int(params.StackLimit); have > limit {
+				if have, limit := height+int(section.MaxStackHeight)-int(section.Input), int(params.StackLimit); have > limit {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
 				}
-				height -= int(metadata[arg].Input)
-				height += int(metadata[arg].Output)
+				height -= int(section.Input)
+				height += int(section.Output)
 				pos += 3
 			case op == RETF:
 				if have, want := int(metadata[section].Output), height; have != want {
