@@ -235,6 +235,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				}
 				pos += 2 + 2*count
 			case op == DUPN:
+				fallthrough
 			case op == SWAPN:
 				arg := int(code[pos+1]) + 1
 				if want, have := arg, height; want >= have {
