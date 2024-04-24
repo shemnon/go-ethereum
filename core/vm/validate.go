@@ -178,18 +178,15 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 	outer:
 		for pos < len(code) {
 			op := OpCode(code[pos])
-
 			// Check if pos has already be visited; if so, the stack heights should be the same.
 			if want, ok := heights[pos]; ok {
-				if height > want {
-					return 0, fmt.Errorf("%w: have %d, want %d", ErrConflictingStack, height, want)
-				}
 				if height == want {
 					// Already visited this path and stack height
 					// matches.
 					break
 				}
 				// Already visited this path but the stack height is not the same, need to revisit again
+				// TODO (MariusVanDerWijden): can this result in an infinite loop?
 			}
 			heights[pos] = height
 
@@ -205,15 +202,15 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			switch {
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
-				section := metadata[arg]
-				if want, have := int(section.Input), height; want > have {
+				newSection := metadata[arg]
+				if want, have := int(newSection.Input), height; want > have {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
-				if have, limit := height+int(section.MaxStackHeight)-int(section.Input), int(params.StackLimit); have > limit {
+				if have, limit := height+int(newSection.MaxStackHeight)-int(newSection.Input), int(params.StackLimit); have > limit {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
 				}
-				height -= int(section.Input)
-				height += int(section.Output)
+				height -= int(newSection.Input)
+				height += int(newSection.Output)
 				pos += 3
 			case op == RETF:
 				if have, want := int(metadata[section].Output), height; have != want {
@@ -250,6 +247,22 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
 				pos += 2
+			case op == JUMPF:
+				arg, _ := parseUint16(code[pos+1:])
+				newSection := metadata[arg]
+				if have, limit := height+int(newSection.MaxStackHeight)-int(newSection.Input), int(params.StackLimit); have > limit {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
+				}
+				if newSection.Output == 0x80 {
+					if want, have := int(newSection.Input), height; want > have {
+						return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+					}
+				} else {
+					if have, want := height, int(metadata[section].Output)+int(newSection.Input)-int(newSection.Output); have != want {
+						return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNumberOfOutputs, pos)
+					}
+				}
+				pos += 3
 			default:
 				if jt[op].immediate != 0 {
 					pos += jt[op].immediate + 1
