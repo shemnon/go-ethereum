@@ -115,8 +115,7 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 				if arg >= len(container.ContainerSections) {
 					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
-				// TODO is this really correct???
-				if ct := container.ContainerSections[arg]; len(ct.Data) != container.DataSize {
+				if ct := container.ContainerSections[arg]; len(ct.Data) != ct.DataSize {
 					return visited, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 				}
 			}

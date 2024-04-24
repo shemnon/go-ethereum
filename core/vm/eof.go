@@ -271,11 +271,12 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		}
 		container := make([]*Container, 0, len(containerSizes))
 		for i, size := range containerSizes {
-			if size == 0 {
+			if size == 0 || idx+size > len(b) {
 				return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidContainerSectionSize, i)
 			}
 			c := new(Container)
-			if err := c.UnmarshalBinary(b[idx : idx+size]); err != nil {
+			end := min(idx+size, len(b))
+			if err := c.UnmarshalBinary(b[idx:end]); err != nil {
 				return fmt.Errorf("%w for section %d", err, i)
 			}
 			container = append(container, c)
@@ -285,7 +286,8 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	}
 
 	// Parse data section.
-	c.Data = b[idx : idx+dataSize]
+	end := min(idx+dataSize, len(b))
+	c.Data = b[idx:end]
 
 	return nil
 }
