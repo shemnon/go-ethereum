@@ -32,16 +32,18 @@ func TestEOFMarshaling(t *testing.T) {
 	}{
 		{
 			want: Container{
-				Types: []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
-				Code:  [][]byte{common.Hex2Bytes("604200")},
-				Data:  []byte{0x01, 0x02, 0x03},
+				Types:    []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+				Code:     [][]byte{common.Hex2Bytes("604200")},
+				Data:     []byte{0x01, 0x02, 0x03},
+				DataSize: 3,
 			},
 		},
 		{
 			want: Container{
-				Types: []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
-				Code:  [][]byte{common.Hex2Bytes("604200")},
-				Data:  []byte{0x01, 0x02, 0x03},
+				Types:    []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+				Code:     [][]byte{common.Hex2Bytes("604200")},
+				Data:     []byte{0x01, 0x02, 0x03},
+				DataSize: 3,
 			},
 		},
 		{
@@ -84,6 +86,7 @@ func TestEOFSubcontainer(t *testing.T) {
 		Code:              [][]byte{common.Hex2Bytes("604200")},
 		ContainerSections: []*Container{subcontainer},
 		Data:              []byte{0x01, 0x02, 0x03},
+		DataSize:          3,
 	}
 	var (
 		b   = container.MarshalBinary()

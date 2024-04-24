@@ -118,7 +118,7 @@ func TestValidateCode(t *testing.T) {
 			code: []byte{
 				byte(PUSH0),
 				byte(RJUMPV),
-				byte(0x02),
+				byte(0x01),
 				byte(0x00),
 				byte(0x01),
 				byte(0x00),
@@ -141,7 +141,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-			err:      ErrInvalidBranchCount,
+			err:      ErrTruncatedImmediate,
 		},
 		{
 			code: []byte{
@@ -181,7 +181,7 @@ func TestValidateCode(t *testing.T) {
 		{
 			code: []byte{
 				byte(PUSH1), 1,
-				byte(RJUMPV), 0x02, 0x00, 0x03, 0xff, 0xf8,
+				byte(RJUMPV), 0x01, 0x00, 0x03, 0xff, 0xf8,
 				byte(JUMPDEST),
 				byte(JUMPDEST),
 				byte(STOP),

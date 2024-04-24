@@ -382,7 +382,7 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasFastishStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
-		immediate:   1, // at least 1, maybe more
+		immediate:   3, // at least 3, maybe more
 	}
 	jt[CALLF] = &operation{
 		execute:     opCallf,

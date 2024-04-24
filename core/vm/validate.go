@@ -72,19 +72,18 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 					return visited, err
 				}
 			case op == RJUMPV:
-				count := int(code[i+1])
-				if count == 0 {
-					return visited, fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
-				}
-				if len(code) <= i+count {
+				max_size := int(code[i+1])
+				length := max_size + 1
+				if len(code) <= i+length {
 					return visited, fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
 				}
-				for j := 0; j < count; j++ {
-					if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
+				offset := i + 2
+				for j := 0; j < length; j++ {
+					if err := checkDest(code, &analysis, offset+j*2, offset+(length*2), len(code)); err != nil {
 						return visited, err
 					}
 				}
-				i += 2 * count
+				i += 2 * max_size
 			case op == CALLF:
 				arg, _ := parseUint16(code[i+1:])
 				if arg >= len(container.Types) {
@@ -228,7 +227,7 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
 				pos += 3
 			case op == RJUMPV:
-				count := int(code[pos+1])
+				count := int(code[pos+1]) + 1
 				for i := 0; i < count; i++ {
 					arg := parseInt16(code[pos+2+2*i:])
 					worklist = append(worklist, item{pos: pos + 2 + 2*count + arg, height: height})
