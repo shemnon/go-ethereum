@@ -491,24 +491,24 @@ func enableEOF(jt *JumpTable) {
 		execute:     opExtCall,
 		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasCall,
-		minStack:    minStack(6, 1),
-		maxStack:    maxStack(6, 1),
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
 		memorySize:  memoryCall,
 	}
 	jt[EXTDELEGATECALL] = &operation{
 		execute:     opExtDelegateCall,
 		dynamicGas:  gasDelegateCall,
 		constantGas: params.CallGasEIP150,
-		minStack:    minStack(5, 1),
-		maxStack:    maxStack(5, 1),
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
 		memorySize:  memoryDelegateCall,
 	}
 	jt[EXTSTATICCALL] = &operation{
 		execute:     opExtStaticCall,
 		constantGas: params.CallGasEIP150,
 		dynamicGas:  gasStaticCall,
-		minStack:    minStack(5, 1),
-		maxStack:    maxStack(5, 1),
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
 		memorySize:  memoryStaticCall,
 	}
 }
