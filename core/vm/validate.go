@@ -160,19 +160,21 @@ func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
 // value and determines if it is valid per EOF v1.
 func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) (int, error) {
 	type item struct {
-		pos    int
-		height int
+		pos       int
+		height    int
+		backwards bool
 	}
 	var (
 		heights        = make(map[int]int)
-		worklist       = []item{{0, int(metadata[section].Input)}}
+		worklist       = []item{{0, int(metadata[section].Input), false}}
 		maxStackHeight = int(metadata[section].Input)
 	)
 	for 0 < len(worklist) {
 		var (
-			idx    = len(worklist) - 1
-			pos    = worklist[idx].pos
-			height = worklist[idx].height
+			idx       = len(worklist) - 1
+			pos       = worklist[idx].pos
+			height    = worklist[idx].height
+			backwards = worklist[idx].backwards
 		)
 		worklist = worklist[:idx]
 	outer:
@@ -187,6 +189,9 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 				}
 				// Already visited this path but the stack height is not the same, need to revisit again
 				// TODO (MariusVanDerWijden): can this result in an infinite loop?
+			} else if backwards {
+				// If a instruction can only be reached by backwards jump, bail
+				break
 			}
 			heights[pos] = height
 
@@ -220,6 +225,8 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			case op == RJUMP:
 				arg := parseInt16(code[pos+1:])
 				pos += 3 + arg
+				worklist = append(worklist, item{pos: pos, height: height, backwards: arg < 0})
+				break outer
 			case op == RJUMPI:
 				arg := parseInt16(code[pos+1:])
 				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
