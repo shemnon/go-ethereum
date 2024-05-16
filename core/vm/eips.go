@@ -162,7 +162,7 @@ func enable2929(jt *JumpTable) {
 // enable2935 enables "EIP-2935: Serve historical block hashes from state"
 // - Additionally charge the corresponding warm or cold SLOAD costs for BLOCKHASH
 func enable2935(jt *JumpTable) {
-	jt[BLOCKHASH].dynamicGas = gasSLoadEIP2929
+	jt[BLOCKHASH].dynamicGas = gasSLoadEIP2935
 }
 
 // enable3529 enabled "EIP-3529: Reduction in refunds":

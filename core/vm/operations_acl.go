@@ -116,6 +116,21 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	return params.WarmStorageReadCostEIP2929, nil
 }
 
+// gasSLoadEIP2935 calculates dynamic gas for SLOAD according to EIP-2929
+// but for the block hash history storage address.
+func gasSLoadEIP2935(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	loc := stack.peek()
+	slot := common.Hash(loc.Bytes32())
+	// Check slot presence in the access list
+	if _, slotPresent := evm.StateDB.SlotInAccessList(params.HistoryStorageAddress, slot); !slotPresent {
+		// If the caller cannot afford the cost, this change will be rolled back
+		// If he does afford it, we can skip checking the same thing later on, during execution
+		evm.StateDB.AddSlotToAccessList(params.HistoryStorageAddress, slot)
+		return params.ColdSloadCostEIP2929, nil
+	}
+	return params.WarmStorageReadCostEIP2929, nil
+}
+
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929
 // EIP spec:
 // > If the target is not in accessed_addresses,
