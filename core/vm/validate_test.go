@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestValidateCode(t *testing.T) {
@@ -250,6 +251,60 @@ func TestValidateCode(t *testing.T) {
 		_, err := validateCode(test.code, test.section, container, &pragueEOFInstructionSet)
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
+		}
+	}
+}
+
+func BenchmarkRJUMPI(b *testing.B) {
+	snippet := []byte{
+		byte(PUSH0),
+		byte(RJUMPI), 0xFF, 0xFC,
+	}
+	code := []byte{}
+	for i := 0; i < params.MaxCodeSize/len(snippet)-1; i++ {
+		code = append(code, snippet...)
+	}
+	code = append(code, byte(STOP))
+	container := &Container{
+		Types:             []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+		Data:              make([]byte, 0),
+		ContainerSections: make([]*Container, 0),
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkRJUMPV(b *testing.B) {
+	snippet := []byte{
+		byte(PUSH0),
+		byte(RJUMPV),
+		0xff, // count
+		0x00, 0x00,
+	}
+	for i := 0; i < 255; i++ {
+		snippet = append(snippet, []byte{0x00, 0x00}...)
+	}
+	code := []byte{}
+	for i := 0; i < 24576/len(snippet)-1; i++ {
+		code = append(code, snippet...)
+	}
+	code = append(code, byte(PUSH0))
+	code = append(code, byte(STOP))
+	container := &Container{
+		Types:             []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
+		Data:              make([]byte, 0),
+		ContainerSections: make([]*Container, 0),
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
 }

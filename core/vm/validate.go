@@ -29,6 +29,7 @@ var (
 	ErrInvalidCallArgument           = errors.New("callf into non-returning section")
 	ErrInvalidDataloadNArgument      = errors.New("invalid dataloadN argument")
 	ErrInvalidJumpDest               = errors.New("invalid jump destination")
+	ErrInvalidBackwardJump           = errors.New("invalid backward jump")
 	ErrConflictingStack              = errors.New("conflicting stack height")
 	ErrInvalidBranchCount            = errors.New("invalid number of branches in jump table")
 	ErrInvalidOutputs                = errors.New("invalid number of outputs")
@@ -127,7 +128,7 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 	if !jt[op].terminal {
 		return visited, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
-	if paths, err := validateControlFlow(code, section, container.Types, jt); err != nil {
+	if paths, err := validateControlFlow2(code, section, container.Types, jt); err != nil {
 		return visited, err
 	} else if paths != count {
 		fmt.Printf("Paths: %v Count: %v\n", paths, count)
