@@ -124,8 +124,8 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 		i += 1
 	}
 	// Code sections may not "fall through" and require proper termination.
-	// Therefore, the last instruction must be considered terminal.
-	if !jt[op].terminal {
+	// Therefore, the last instruction must be considered terminal or RJUMP.
+	if !jt[op].terminal && op != RJUMP {
 		return visited, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
 	if paths, err := validateControlFlow2(code, section, container.Types, jt); err != nil {

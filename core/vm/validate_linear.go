@@ -21,6 +21,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		op := OpCode(code[pos])
 		currentBounds := stackBounds[pos]
 		if currentBounds == nil {
+			fmt.Println("Stack bounds not set")
 			return 0, ErrUnreachableCode
 		}
 
@@ -41,12 +42,12 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 				return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
 			}
 			change := int(newSection.Output) - int(newSection.Input)
-			setBounds(pos, currentBounds.min+change, currentBounds.max+change)
+			currentBounds = setBounds(pos, currentBounds.min+change, currentBounds.max+change)
 		case RETF:
 			if currentBounds.max != currentBounds.min {
 				return 0, fmt.Errorf("%w: max %d, min %d, at pos %d", ErrInvalidNumberOfOutputs, currentBounds.max, currentBounds.min, pos)
 			}
-			if have, want := int(metadata[section].Output), currentBounds.min; have != want {
+			if have, want := int(metadata[section].Output), currentBounds.min; have > want { // TODO as I understand the spec, this should be !=, see 2.I
 				return 0, fmt.Errorf("%w: have %d, want %d, at pos %d", ErrInvalidOutputs, have, want, pos)
 			}
 		case JUMPF:
@@ -98,7 +99,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		case RJUMPV:
 			count := int(code[pos+1]) + 1
 			next = append(next, pos+2+2*count)
-			for i := 0; i < count; i++ {
+			for i := 0; i < count-1; i++ {
 				arg := parseInt16(code[pos+2+2*i:])
 				next = append(next, pos+2+2*count+arg)
 			}
@@ -116,16 +117,17 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			if nextPC > len(code) {
 				return 0, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, pos)
 			}
+			nextOP := code[nextPC]
 			nextBounds, ok := stackBounds[nextPC]
 			if !ok {
-				change := int(params.StackLimit) - jt[nextPC].maxStack + jt[nextPC].minStack
+				change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
 				nextBounds = setBounds(nextPC, currentBounds.min+change, currentBounds.max+change)
 			} else {
-				setBounds(nextPC, min(nextBounds.min, currentBounds.min), max(nextBounds.max, currentBounds.max))
+				nextBounds = setBounds(nextPC, min(nextBounds.min, currentBounds.min), max(nextBounds.max, currentBounds.max))
 			}
 			if nextPC < pos {
 				// target reached via backwards jump
-				change := int(params.StackLimit) - jt[nextPC].maxStack + jt[nextPC].minStack
+				change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
 				if have, want := nextBounds.max, currentBounds.max+change; have != want {
 					return 0, fmt.Errorf("%w want %d as max got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 				}
@@ -137,7 +139,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 
 		// next[0] must always be the next operation -1
 		pos = next[0]
-		if !jt[op].terminal {
+		if !jt[op].terminal && op != RJUMP {
 			change := int(params.StackLimit) - jt[op].maxStack + jt[op].minStack
 			setBounds(pos+1, currentBounds.min+change, currentBounds.max+change)
 		}

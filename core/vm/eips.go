@@ -367,7 +367,6 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
-		terminal:    true,
 		immediate:   2,
 	}
 	jt[RJUMPI] = &operation{
