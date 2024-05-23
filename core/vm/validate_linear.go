@@ -118,20 +118,26 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 				return 0, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, pos)
 			}
 			nextOP := code[nextPC]
-			nextBounds, ok := stackBounds[nextPC]
-			if !ok {
-				change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
-				nextBounds = setBounds(nextPC, currentBounds.min+change, currentBounds.max+change)
+			if nextPC >= pos {
+				// target reached via forward jump or seq flow
+				nextBounds, ok := stackBounds[nextPC]
+				if !ok {
+					change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
+					setBounds(nextPC, currentBounds.min+change, currentBounds.max+change)
+				} else {
+					setBounds(nextPC, min(nextBounds.min, currentBounds.min), max(nextBounds.max, currentBounds.max))
+				}
 			} else {
-				nextBounds = setBounds(nextPC, min(nextBounds.min, currentBounds.min), max(nextBounds.max, currentBounds.max))
-			}
-			if nextPC < pos {
 				// target reached via backwards jump
+				nextBounds, ok := stackBounds[nextPC]
+				if !ok {
+					return 0, ErrInvalidBackwardJump
+				}
 				change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
-				if have, want := nextBounds.max, currentBounds.max+change; have != want {
+				if have, want := nextBounds.max+change, currentBounds.max; have != want {
 					return 0, fmt.Errorf("%w want %d as max got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 				}
-				if have, want := nextBounds.min, currentBounds.min+change; have != want {
+				if have, want := nextBounds.min+change, currentBounds.min; have != want {
 					return 0, fmt.Errorf("%w want %d as min got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 				}
 			}
