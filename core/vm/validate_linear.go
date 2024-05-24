@@ -111,10 +111,10 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			next = append(next, pos+2+arg)
 		case RJUMPV:
 			count := int(code[pos+1]) + 1
-			next = append(next, pos+2+2*count)
+			next = append(next, pos+1+2*count)
 			for i := 0; i < count-1; i++ {
 				arg := parseInt16(code[pos+2+2*i:])
-				next = append(next, pos+2+2*count+arg)
+				next = append(next, pos+1+2*count+arg)
 			}
 		default:
 			if jt[op].immediate != 0 {
@@ -127,7 +127,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 
 		for _, instr := range next[1:] {
 			nextPC := instr + 1
-			if nextPC > len(code) {
+			if nextPC >= len(code) {
 				return 0, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, pos)
 			}
 			nextOP := code[nextPC]
