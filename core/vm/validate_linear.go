@@ -16,19 +16,21 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		stackBounds    = make(map[int]*bounds)
 		maxStackHeight = int(metadata[section].Input)
 	)
-	stackBounds[0] = &bounds{int(metadata[section].Input), int(metadata[section].Input)}
+
+	setBounds := func(pos, min, maxi int) *bounds {
+		stackBounds[pos] = &bounds{min, maxi}
+		maxStackHeight = max(maxStackHeight, maxi)
+		return stackBounds[pos]
+	}
+	// set the initial stack bounds
+	setBounds(0, int(metadata[section].Input), int(metadata[section].Input))
+
 	for pos := 0; pos < len(code); pos++ {
 		op := OpCode(code[pos])
 		currentBounds := stackBounds[pos]
 		if currentBounds == nil {
 			fmt.Println("Stack bounds not set")
 			return 0, ErrUnreachableCode
-		}
-
-		setBounds := func(pos, min, maxi int) *bounds {
-			stackBounds[pos] = &bounds{min, maxi}
-			maxStackHeight = max(maxStackHeight, maxi)
-			return stackBounds[pos]
 		}
 
 		switch op {
@@ -87,6 +89,17 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			}
 		}
 
+		var (
+			currentStackMax = currentBounds.max
+			currentStackMin = currentBounds.min
+		)
+
+		if !jt[op].terminal && op != CALLF {
+			change := int(params.StackLimit) - jt[op].maxStack
+			currentStackMax += change
+			currentStackMin += change
+		}
+
 		var next []int
 		switch op {
 		case RJUMP:
@@ -122,10 +135,9 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 				// target reached via forward jump or seq flow
 				nextBounds, ok := stackBounds[nextPC]
 				if !ok {
-					change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
-					setBounds(nextPC, currentBounds.min+change, currentBounds.max+change)
+					setBounds(nextPC, currentStackMin, currentStackMax)
 				} else {
-					setBounds(nextPC, min(nextBounds.min, currentBounds.min), max(nextBounds.max, currentBounds.max))
+					setBounds(nextPC, min(nextBounds.min, currentStackMin), max(nextBounds.max, currentStackMax))
 				}
 			} else {
 				// target reached via backwards jump
@@ -146,8 +158,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		// next[0] must always be the next operation -1
 		pos = next[0]
 		if !jt[op].terminal && op != RJUMP {
-			change := int(params.StackLimit) - jt[op].maxStack + jt[op].minStack
-			setBounds(pos+1, currentBounds.min+change, currentBounds.max+change)
+			setBounds(pos+1, currentStackMin, currentStackMax)
 		}
 	}
 	if maxStackHeight >= int(params.StackLimit) {
