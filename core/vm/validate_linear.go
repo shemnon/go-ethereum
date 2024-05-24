@@ -59,7 +59,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 				return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
 			}
 			if newSection.Output == 0x80 {
-				if want, have := int(newSection.Input), currentBounds.min; want >= have {
+				if want, have := int(newSection.Input), currentBounds.min; want > have {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
 			} else {
@@ -72,7 +72,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			}
 		case DUPN, SWAPN:
 			arg := int(code[pos+1]) + 1
-			if want, have := arg, currentBounds.min; want >= have {
+			if want, have := arg, currentBounds.min; want > have {
 				return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 			}
 			pos += 2
@@ -80,7 +80,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			arg := int(code[pos+1])
 			n := arg>>4 + 1
 			m := arg&0x0f + 1
-			if want, have := n+m, currentBounds.min; want >= have {
+			if want, have := n+m, currentBounds.min; want > have {
 				return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 			}
 		default:
