@@ -147,7 +147,7 @@ func TestValidateCode(t *testing.T) {
 		{
 			code: []byte{
 				byte(RJUMP), 0x00, 0x03,
-				byte(JUMPDEST),
+				byte(JUMPDEST), // this code is unreachable to forward jumps alone
 				byte(JUMPDEST),
 				byte(RETURN),
 				byte(PUSH1), 20,
@@ -160,6 +160,7 @@ func TestValidateCode(t *testing.T) {
 			},
 			section:  0,
 			metadata: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 3}},
+			err:      ErrUnreachableCode,
 		},
 		{
 			code: []byte{

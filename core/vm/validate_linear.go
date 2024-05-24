@@ -156,8 +156,10 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		}
 
 		// next[0] must always be the next operation -1
-		pos = next[0]
-		if !jt[op].terminal && op != RJUMP {
+		if op != RJUMP {
+			pos = next[0]
+		}
+		if !jt[op].terminal {
 			setBounds(pos+1, currentStackMin, currentStackMax)
 		}
 	}
