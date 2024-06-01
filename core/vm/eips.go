@@ -392,7 +392,7 @@ func enableEOF(jt *JumpTable) {
 	}
 	jt[RETF] = &operation{
 		execute:     opRetf,
-		constantGas: GasFastishStep,
+		constantGas: GasFastestStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		terminal:    true,
@@ -586,6 +586,9 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	)
 	if scope.Stack.len()+int(typ.MaxStackHeight) >= 1024 {
 		return nil, fmt.Errorf("stack overflow")
+	}
+	if len(scope.ReturnStack) > 1024 {
+		return nil, fmt.Errorf("return stack overflow")
 	}
 	retCtx := &ReturnContext{
 		Section:     scope.CodeSection,
@@ -818,11 +821,11 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		code  = scope.Contract.CodeAt(scope.CodeSection)
-		index = int(code[*pc+1]) + 1
-		n     = index>>4 + 1
-		m     = index%0x0F + 1
+		index = int(code[*pc+1])
+		n     = index>>4 + 2
+		m     = index&0x0F + 1
 	)
-	scope.Stack.swapN(n, m)
+	scope.Stack.swapN(n, n+m)
 	*pc += 1
 	return nil, nil
 }
