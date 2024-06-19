@@ -68,8 +68,8 @@ func (s Requests) EncodeIndex(i int, w *bytes.Buffer) {
 func (s Requests) Deposits() Deposits {
 	deposits := make(Deposits, 0, len(s))
 	for _, req := range s {
-		if req.Type() == DepositRequestType {
-			deposits = append(deposits, req.inner.(*Deposit))
+		if d, ok := req.inner.(*Deposit); ok {
+			deposits = append(deposits, d)
 		}
 	}
 	return deposits

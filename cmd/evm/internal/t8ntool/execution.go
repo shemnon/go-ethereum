@@ -66,7 +66,7 @@ type ExecutionResult struct {
 	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
-	RequestsRoot         *common.Hash          `json:"requestsRoot,omitempty"`
+	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
 	DepositRequests      *types.Deposits       `json:"depositRequests,omitempty"`
 }
 
@@ -382,7 +382,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		// Calculate the requests root
 		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
-		execRs.RequestsRoot = &h
+		execRs.RequestsHash = &h
 		// Get the deposits from the requests
 		deposits := requests.Deposits()
 		execRs.DepositRequests = &deposits

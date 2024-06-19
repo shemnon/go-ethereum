@@ -19,7 +19,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -31,10 +30,10 @@ import (
 
 // Deposit contians EIP-6110 deposit data.
 type Deposit struct {
-	PublicKey             BLSPublicKey `json:"pubkey"`                // public key of validator
+	PublicKey             [48]byte     `json:"pubkey"`                // public key of validator
 	WithdrawalCredentials common.Hash  `json:"withdrawalCredentials"` // beneficiary of the validator funds
 	Amount                uint64       `json:"amount"`                // deposit size in Gwei
-	Signature             BLSSignature `json:"signature"`             // signature over deposit msg
+	Signature             [96]byte     `json:"signature"`             // signature over deposit msg
 	Index                 uint64       `json:"index"`                 // deposit count value
 }
 
@@ -116,36 +115,4 @@ func (d *Deposit) copy() RequestData {
 		Signature:             d.Signature,
 		Index:                 d.Index,
 	}
-}
-
-// misc bls types
-////
-
-var (
-	pubkeyT = reflect.TypeOf(BLSPublicKey{})
-	sigT    = reflect.TypeOf(BLSSignature{})
-)
-
-type BLSPublicKey [48]byte
-
-// UnmarshalJSON parses a hash in hex syntax.
-func (h *BLSPublicKey) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(pubkeyT, input, h[:])
-}
-
-// MarshalText returns the hex representation of h.
-func (h BLSPublicKey) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(h[:]).MarshalText()
-}
-
-type BLSSignature [96]byte
-
-// UnmarshalJSON parses a hash in hex syntax.
-func (h *BLSSignature) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(sigT, input, h[:])
-}
-
-// MarshalText returns the hex representation of h.
-func (h BLSSignature) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(h[:]).MarshalText()
 }

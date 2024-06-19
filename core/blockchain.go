@@ -1919,14 +1919,14 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
 	if err != nil {
-		bc.reportBlock(block, nil, err)
+		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
 	if err := bc.validator.ValidateState(block, statedb, res); err != nil {
-		bc.reportBlock(block, res.Receipts, err)
+		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
@@ -2467,7 +2467,11 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 }
 
 // reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err error) {
+	var receipts types.Receipts
+	if res != nil {
+		receipts = res.Receipts
+	}
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
 }

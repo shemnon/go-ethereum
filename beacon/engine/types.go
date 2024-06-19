@@ -237,7 +237,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		requests     types.Requests
 	)
 	if params.Deposits != nil {
-		requests = make(types.Requests, 0)
+		requests = make(types.Requests, 0, len(params.Deposits.Requests()))
 		requests = append(requests, params.Deposits.Requests()...)
 		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
 		requestsHash = &h
@@ -264,7 +264,15 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		ParentBeaconRoot: beaconRoot,
 		RequestsHash:     requestsHash,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals, Requests: requests})
+	var (
+		body = types.Body{
+			Transactions: txs,
+			Uncles:       nil,
+			Withdrawals:  params.Withdrawals,
+			Requests:     requests,
+		}
+		block = types.NewBlockWithHeader(header).WithBody(body)
+	)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
