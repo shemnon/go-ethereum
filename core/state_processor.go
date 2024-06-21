@@ -82,6 +82,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
+	if p.config.IsPrague(block.Number(), block.Time()) {
+		// This should not underflow as genesis block is not processed.
+		ProcessParentBlockHash(statedb, block.ParentHash(), block.NumberU64()-1)
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -279,4 +283,13 @@ func ProcessDequeueWithdrawalRequests(vmenv *vm.EVM, statedb *state.StateDB) typ
 		reqs = append(reqs, types.NewRequest(wx))
 	}
 	return reqs
+}
+
+// ProcessParentBlockHash stores the parent block hash in the history storage contract
+// as per EIP-2935.
+func ProcessParentBlockHash(statedb *state.StateDB, prevHash common.Hash, prevNumber uint64) {
+	ringIndex := prevNumber % params.HistoryServeWindow
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
 }
