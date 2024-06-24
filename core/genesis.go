@@ -479,8 +479,8 @@ func (g *Genesis) ToBlock() *types.Block {
 			}
 		}
 		if conf.IsPrague(num, g.Timestamp) {
-			head.RequestsHash = &types.EmptyRequestsHash
-			requests = make(types.Requests, 0)
+			//head.RequestsHash = &types.EmptyRequestsHash
+			//requests = make(types.Requests, 0)
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))
