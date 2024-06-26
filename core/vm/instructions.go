@@ -352,7 +352,12 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
+	if isEOFVersion1(code) {
+		slot.SetUint64(2)
+	} else {
+		slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	}
 	return nil, nil
 }
 
@@ -384,14 +389,19 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		memOffset  = stack.pop()
 		codeOffset = stack.pop()
 		length     = stack.pop()
+		lengthU64  = length.Uint64()
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+	code := interpreter.evm.StateDB.GetCode(addr)
+	if isEOFVersion1(code) {
+		lengthU64 = 2
+	}
+	codeCopy := getData(code, uint64CodeOffset, lengthU64)
+	scope.Memory.Set(memOffset.Uint64(), lengthU64, codeCopy)
 
 	return nil, nil
 }
@@ -428,7 +438,12 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		code := interpreter.evm.StateDB.GetCode(address)
+		if HasEOFByte(code) {
+			slot.SetFromHex("0x9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5")
+		} else {
+			slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		}
 	}
 	return nil, nil
 }
