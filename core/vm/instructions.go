@@ -352,6 +352,7 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
+	// TODO this should not need to pull up the whole code
 	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
 	if isEOFVersion1(code) {
 		slot.SetUint64(2)
@@ -438,6 +439,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
+		// TODO this should not need to pull up the whole code
 		code := interpreter.evm.StateDB.GetCode(address)
 		if HasEOFByte(code) {
 			slot.SetFromHex("0x9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5")
