@@ -858,10 +858,9 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 	)
-	if int(idx) >= len(scope.Contract.Container.ContainerSections) {
+	if int(idx) >= len(scope.Contract.Container.ContainerCode) {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
-	subcontainer := scope.Contract.Container.ContainerSections[idx]
 
 	// Deduct hashing charge
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
@@ -882,7 +881,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// Skip the immediate
 	*pc += 1
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer.MarshalBinary(), gas, &value, &salt)
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, scope.Contract.Container.ContainerCode[idx], gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
 	} else {
@@ -979,7 +978,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	// Validate the subcontainer
 	var c Container
 	if err := c.UnmarshalBinary(deployedCode, true); err != nil {
-		panic(fmt.Sprintf("%x", deployedCode))
+		return nil, err
 	}
 	if err := c.ValidateCode(interpreter.tableEOF); err != nil {
 		return nil, err
@@ -996,8 +995,6 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	scope.ReturnStack = scope.ReturnStack[:last]
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1
-	fmt.Printf("%v", c.MarshalBinary())
-	fmt.Printf("%v", deployedCode)
 	return c.MarshalBinary(), errStopToken
 }
 
