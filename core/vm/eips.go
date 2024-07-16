@@ -712,7 +712,7 @@ func enableEOF(jt *JumpTable) {
 		constantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(3, 1),
 		maxStack:    maxStack(3, 1),
-		memorySize:  memoryExtDelegateCall,
+		memorySize:  memoryExtCall,
 	}
 	jt[EXTSTATICCALL] = &operation{
 		execute:     opExtStaticCall,
@@ -720,7 +720,7 @@ func enableEOF(jt *JumpTable) {
 		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtStaticCall, 0),
 		minStack:    minStack(3, 1),
 		maxStack:    maxStack(3, 1),
-		memorySize:  memoryExtStaticCall,
+		memorySize:  memoryExtCall,
 	}
 }
 
@@ -1094,7 +1094,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	// Use all available gas
 	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
-	addr, value, inOffset, inSize := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	addr, inOffset, inSize, value := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	if addr.ByteLen() > 20 {
 		return nil, errors.New("address space extension")
@@ -1121,7 +1121,6 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		temp.Clear()
 	}
 	stack.push(&temp)
-	fmt.Println(returnGas)
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret
