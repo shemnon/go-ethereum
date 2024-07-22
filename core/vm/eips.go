@@ -980,7 +980,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	if err := c.UnmarshalBinary(deployedCode, true); err != nil {
 		return nil, err
 	}
-	if err := c.ValidateCode(interpreter.tableEOF); err != nil {
+	if err := c.ValidateCode(interpreter.tableEOF, true); err != nil {
 		return nil, err
 	}
 	if len(c.Data) < c.DataSize {
