@@ -17,21 +17,16 @@ var _ = (*authorizationMarshaling)(nil)
 func (a Authorization) MarshalJSON() ([]byte, error) {
 	type Authorization struct {
 		ChainID *hexutil.Big
-		Address common.Address   `json:"address" gencodec:"required"`
-		Nonce   []hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       *hexutil.Big     `json:"v" gencodec:"required"`
-		R       *hexutil.Big     `json:"r" gencodec:"required"`
-		S       *hexutil.Big     `json:"s" gencodec:"required"`
+		Address common.Address `json:"address" gencodec:"required"`
+		Nonce   hexutil.Uint64 `json:"nonce" gencodec:"required"`
+		V       *hexutil.Big   `json:"v" gencodec:"required"`
+		R       *hexutil.Big   `json:"r" gencodec:"required"`
+		S       *hexutil.Big   `json:"s" gencodec:"required"`
 	}
 	var enc Authorization
 	enc.ChainID = (*hexutil.Big)(a.ChainID)
 	enc.Address = a.Address
-	if a.Nonce != nil {
-		enc.Nonce = make([]hexutil.Uint64, len(a.Nonce))
-		for k, v := range a.Nonce {
-			enc.Nonce[k] = hexutil.Uint64(v)
-		}
-	}
+	enc.Nonce = hexutil.Uint64(a.Nonce)
 	enc.V = (*hexutil.Big)(a.V)
 	enc.R = (*hexutil.Big)(a.R)
 	enc.S = (*hexutil.Big)(a.S)
@@ -42,11 +37,11 @@ func (a Authorization) MarshalJSON() ([]byte, error) {
 func (a *Authorization) UnmarshalJSON(input []byte) error {
 	type Authorization struct {
 		ChainID *hexutil.Big
-		Address *common.Address  `json:"address" gencodec:"required"`
-		Nonce   []hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       *hexutil.Big     `json:"v" gencodec:"required"`
-		R       *hexutil.Big     `json:"r" gencodec:"required"`
-		S       *hexutil.Big     `json:"s" gencodec:"required"`
+		Address *common.Address `json:"address" gencodec:"required"`
+		Nonce   *hexutil.Uint64 `json:"nonce" gencodec:"required"`
+		V       *hexutil.Big    `json:"v" gencodec:"required"`
+		R       *hexutil.Big    `json:"r" gencodec:"required"`
+		S       *hexutil.Big    `json:"s" gencodec:"required"`
 	}
 	var dec Authorization
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -62,10 +57,7 @@ func (a *Authorization) UnmarshalJSON(input []byte) error {
 	if dec.Nonce == nil {
 		return errors.New("missing required field 'nonce' for Authorization")
 	}
-	a.Nonce = make([]uint64, len(dec.Nonce))
-	for k, v := range dec.Nonce {
-		a.Nonce[k] = uint64(v)
-	}
+	a.Nonce = uint64(*dec.Nonce)
 	if dec.V == nil {
 		return errors.New("missing required field 'v' for Authorization")
 	}

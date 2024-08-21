@@ -96,6 +96,7 @@ func TestExecutionSpecState(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+	st.runonly("eip7702")
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)
@@ -319,7 +320,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				snapshot := state.StateDB.Snapshot()
-				state.StateDB.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList, nil)
+				state.StateDB.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 				b.StartTimer()
 				start := time.Now()
 

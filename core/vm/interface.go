@@ -45,6 +45,9 @@ type StateDB interface {
 	SetCode(common.Address, []byte)
 	GetCodeSize(common.Address) int
 
+	ResolveCodeHash(common.Address) common.Hash
+	ResolveCode(common.Address) []byte
+
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
@@ -81,7 +84,7 @@ type StateDB interface {
 	// PointCache returns the point cache used in computations
 	PointCache() *utils.PointCache
 
-	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList, authList []types.SetCodeDelegation)
+	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
 	Snapshot() int

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"math/big"
 	"os"
 	"testing"
@@ -74,26 +75,24 @@ func TestEIP7702(t *testing.T) {
 	gspec.Config.PragueTime = u64(0)
 	signer := types.LatestSigner(gspec.Config)
 
+	auth1, _ := types.SignAuth(&types.Authorization{
+		ChainID: new(big.Int).Set(gspec.Config.ChainID),
+		Address: aa,
+		Nonce:   1,
+	}, key1)
+
+	auth2, _ := types.SignAuth(&types.Authorization{
+		ChainID: new(big.Int),
+		Address: bb,
+		Nonce:   0,
+	}, key2)
+
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(aa)
-		// One transaction to Coinbase
-
-		auth1, _ := types.SignAuth(&types.Authorization{
-			ChainID: new(big.Int).Set(gspec.Config.ChainID),
-			Address: aa,
-			Nonce:   nil,
-		}, key1)
-
-		auth2, _ := types.SignAuth(&types.Authorization{
-			ChainID: new(big.Int).Set(gspec.Config.ChainID),
-			Address: bb,
-			Nonce:   []uint64{0},
-		}, key2)
-
 		txdata := &types.SetCodeTx{
 			ChainID:   uint256.MustFromBig(gspec.Config.ChainID),
 			Nonce:     0,
-			To:        &addr1,
+			To:        addr1,
 			Gas:       500000,
 			GasFeeCap: uint256.MustFromBig(newGwei(5)),
 			GasTipCap: uint256.NewInt(2),
@@ -120,13 +119,13 @@ func TestEIP7702(t *testing.T) {
 		fortyTwo = common.BytesToHash([]byte{0x42})
 		actual   = state.GetState(addr2, fortyTwo)
 	)
+	if code, want := state.GetCode(addr1), types.AddressToDelegation(auth1.Address); !bytes.Equal(code, want) {
+		t.Fatalf("addr1 code incorrect: got %s, want %s", common.Bytes2Hex(code), common.Bytes2Hex(want))
+	}
+	if code, want := state.GetCode(addr2), types.AddressToDelegation(auth2.Address); !bytes.Equal(code, want) {
+		t.Fatalf("addr2 code incorrect: got %s, want %s", common.Bytes2Hex(code), common.Bytes2Hex(want))
+	}
 	if actual.Cmp(fortyTwo) != 0 {
 		t.Fatalf("addr2 storage wrong: expected %d, got %d", fortyTwo, actual)
-	}
-	if code := state.GetCode(addr1); code != nil {
-		t.Fatalf("addr1 code not cleared: got %s", common.Bytes2Hex(code))
-	}
-	if code := state.GetCode(addr2); code != nil {
-		t.Fatalf("addr2 code not cleared: got %s", common.Bytes2Hex(code))
 	}
 }

@@ -18,7 +18,7 @@ func (s stAuthorization) MarshalJSON() ([]byte, error) {
 	type stAuthorization struct {
 		ChainID *math.HexOrDecimal256
 		Address common.Address        `json:"address" gencodec:"required"`
-		Nonce   []math.HexOrDecimal64 `json:"nonce" gencodec:"required"`
+		Nonce   math.HexOrDecimal64   `json:"nonce" gencodec:"required"`
 		V       *math.HexOrDecimal256 `json:"v" gencodec:"required"`
 		R       *math.HexOrDecimal256 `json:"r" gencodec:"required"`
 		S       *math.HexOrDecimal256 `json:"s" gencodec:"required"`
@@ -26,12 +26,7 @@ func (s stAuthorization) MarshalJSON() ([]byte, error) {
 	var enc stAuthorization
 	enc.ChainID = (*math.HexOrDecimal256)(s.ChainID)
 	enc.Address = s.Address
-	if s.Nonce != nil {
-		enc.Nonce = make([]math.HexOrDecimal64, len(s.Nonce))
-		for k, v := range s.Nonce {
-			enc.Nonce[k] = math.HexOrDecimal64(v)
-		}
-	}
+	enc.Nonce = math.HexOrDecimal64(s.Nonce)
 	enc.V = (*math.HexOrDecimal256)(s.V)
 	enc.R = (*math.HexOrDecimal256)(s.R)
 	enc.S = (*math.HexOrDecimal256)(s.S)
@@ -43,7 +38,7 @@ func (s *stAuthorization) UnmarshalJSON(input []byte) error {
 	type stAuthorization struct {
 		ChainID *math.HexOrDecimal256
 		Address *common.Address       `json:"address" gencodec:"required"`
-		Nonce   []math.HexOrDecimal64 `json:"nonce" gencodec:"required"`
+		Nonce   *math.HexOrDecimal64  `json:"nonce" gencodec:"required"`
 		V       *math.HexOrDecimal256 `json:"v" gencodec:"required"`
 		R       *math.HexOrDecimal256 `json:"r" gencodec:"required"`
 		S       *math.HexOrDecimal256 `json:"s" gencodec:"required"`
@@ -62,10 +57,7 @@ func (s *stAuthorization) UnmarshalJSON(input []byte) error {
 	if dec.Nonce == nil {
 		return errors.New("missing required field 'nonce' for stAuthorization")
 	}
-	s.Nonce = make([]uint64, len(dec.Nonce))
-	for k, v := range dec.Nonce {
-		s.Nonce[k] = uint64(v)
-	}
+	s.Nonce = uint64(*dec.Nonce)
 	if dec.V == nil {
 		return errors.New("missing required field 'v' for stAuthorization")
 	}

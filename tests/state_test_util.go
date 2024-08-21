@@ -143,7 +143,7 @@ type stTransactionMarshaling struct {
 type stAuthorization struct {
 	ChainID *big.Int
 	Address common.Address `json:"address" gencodec:"required"`
-	Nonce   []uint64       `json:"nonce" gencodec:"required"`
+	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       *big.Int       `json:"v" gencodec:"required"`
 	R       *big.Int       `json:"r" gencodec:"required"`
 	S       *big.Int       `json:"s" gencodec:"required"`
@@ -152,7 +152,7 @@ type stAuthorization struct {
 // field type overrides for gencodec
 type stAuthorizationMarshaling struct {
 	ChainID *math.HexOrDecimal256
-	Nonce   []math.HexOrDecimal64
+	Nonce   math.HexOrDecimal64
 	V       *math.HexOrDecimal256
 	R       *math.HexOrDecimal256
 	S       *math.HexOrDecimal256

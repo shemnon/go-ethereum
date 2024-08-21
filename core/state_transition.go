@@ -115,7 +115,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList types.Autho
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
 	if authList != nil {
-		gas += uint64(len(authList)) * params.TxAuthTupleGas
+		gas += uint64(len(authList)) * params.CallNewAccountGas
 	}
 	return gas, nil
 }
@@ -434,39 +434,50 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
 	}
 
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin)
+	// - reset transient storage(eip 1153)
+	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+
+	if !contractCreation {
+		// Increment the nonce for the next transaction
+		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+	}
+
 	// Check authorizations list validity.
-	var delegations []types.SetCodeDelegation
 	if msg.AuthList != nil {
 		seen := make(map[common.Address]bool)
 		for _, auth := range msg.AuthList {
+			// Verify chain ID is 0 or equal to current chain ID.
+			if auth.ChainID.Sign() != 0 && st.evm.ChainConfig().ChainID.Cmp(auth.ChainID) != 0 {
+				continue
+			}
 			authority, err := auth.Authority()
 			if err != nil {
 				continue
 			}
-			var nonce *uint64
-			if len(auth.Nonce) > 1 {
-				return nil, fmt.Errorf("authorization must be either empty list or contain exactly one element")
+			// Check the authority account 1) doesn't have code or has exisiting
+			// delegation 2) matches the auth's nonce
+			code := st.state.GetCode(authority)
+			if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
+				continue
 			}
-			if len(auth.Nonce) == 1 {
-				tmp := auth.Nonce[0]
-				nonce = &tmp
+			if have := st.state.GetNonce(authority); have != auth.Nonce {
+				continue
 			}
-			if nonce != nil {
-				if have := st.state.GetNonce(authority); have != *nonce {
-					continue
-				}
+			// If the account already exists in state, refund the new account cost
+			// charged in the initrinsic calculation.
+			if exists := st.state.Exist(authority); exists {
+				st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 			}
-			if _, ok := seen[authority]; !ok {
-				seen[authority] = true
-				delegations = append(delegations, types.SetCodeDelegation{From: authority, Nonce: nonce, Target: auth.Address})
+			// Only the first valid occurrence should be used.
+			if _, ok := seen[authority]; ok {
+				continue
 			}
+			seen[authority] = true
+			st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 		}
 	}
-
-	// Execute the preparatory steps for state transition which includes:
-	// - prepare accessList(post-berlin)
-	// - reset transient storage(eip 1153)
-	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList, delegations)
 
 	var (
 		ret   []byte
@@ -475,8 +486,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 	}
 

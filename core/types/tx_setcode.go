@@ -13,6 +13,25 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// DelegationPrefix is used by code to denote the account is delegating to
+// another account.
+var DelegationPrefix = []byte{0xef, 0x01, 0x00}
+
+// ParseDelegation tries to parse the address from a delegation slice.
+func ParseDelegation(b []byte) (common.Address, bool) {
+	if len(b) != 23 || !bytes.HasPrefix(b, DelegationPrefix) {
+		return common.Address{}, false
+	}
+	var addr common.Address
+	copy(addr[:], b[len(DelegationPrefix):])
+	return addr, true
+}
+
+// AddressToDelegation adds the delegation prefix to the specified address.
+func AddressToDelegation(addr common.Address) []byte {
+	return append(DelegationPrefix, addr.Bytes()...)
+}
+
 // SetCodeTx implements the EIP-7702 transaction type which temporarily installs
 // the code at the signer's address.
 type SetCodeTx struct {
@@ -21,7 +40,7 @@ type SetCodeTx struct {
 	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
 	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
 	Gas        uint64
-	To         *common.Address `rlp:"nil"` // nil means contract creation
+	To         common.Address
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
@@ -40,7 +59,7 @@ type SetCodeTx struct {
 type Authorization struct {
 	ChainID *big.Int
 	Address common.Address `json:"address" gencodec:"required"`
-	Nonce   []uint64       `json:"nonce" gencodec:"required"`
+	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       *big.Int       `json:"v" gencodec:"required"`
 	R       *big.Int       `json:"r" gencodec:"required"`
 	S       *big.Int       `json:"s" gencodec:"required"`
@@ -49,7 +68,7 @@ type Authorization struct {
 // field type overrides for gencodec
 type authorizationMarshaling struct {
 	ChainID *hexutil.Big
-	Nonce   []hexutil.Uint64
+	Nonce   hexutil.Uint64
 	V       *hexutil.Big
 	R       *hexutil.Big
 	S       *hexutil.Big
@@ -121,7 +140,7 @@ func (a Authorization) Authority() (common.Address, error) {
 
 type SetCodeDelegation struct {
 	From   common.Address
-	Nonce  *uint64
+	Nonce  uint64
 	Target common.Address
 }
 
@@ -153,7 +172,7 @@ func (a AuthorizationList) WithAddress() []AuthorizationTuple {
 func (tx *SetCodeTx) copy() TxData {
 	cpy := &SetCodeTx{
 		Nonce: tx.Nonce,
-		To:    copyAddressPtr(tx.To),
+		To:    tx.To,
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
@@ -204,7 +223,7 @@ func (tx *SetCodeTx) gasTipCap() *big.Int    { return tx.GasTipCap.ToBig() }
 func (tx *SetCodeTx) gasPrice() *big.Int     { return tx.GasFeeCap.ToBig() }
 func (tx *SetCodeTx) value() *big.Int        { return tx.Value.ToBig() }
 func (tx *SetCodeTx) nonce() uint64          { return tx.Nonce }
-func (tx *SetCodeTx) to() *common.Address    { return tx.To }
+func (tx *SetCodeTx) to() *common.Address    { tmp := tx.To; return &tmp }
 
 func (tx *SetCodeTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {
