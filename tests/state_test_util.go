@@ -340,7 +340,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	gaspool.AddGas(block.GasLimit())
 
 	for i := int(block.Number().Uint64() - 1); i >= 0; i-- {
-		core.ProcessParentBlockHash(st.StateDB, vmTestBlockHash(uint64(i)), uint64(i))
+		core.ProcessParentBlockHash(vmTestBlockHash(uint64(i)), evm, st.StateDB)
 	}
 	_, err = core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
