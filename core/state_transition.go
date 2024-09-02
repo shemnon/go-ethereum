@@ -458,6 +458,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			}
 			// Check the authority account 1) doesn't have code or has exisiting
 			// delegation 2) matches the auth's nonce
+			st.state.AddAddressToAccessList(authority)
 			code := st.state.GetCode(authority)
 			if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
 				continue
@@ -475,6 +476,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				continue
 			}
 			seen[authority] = true
+			st.state.SetNonce(authority, auth.Nonce+1)
 			st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 		}
 	}
