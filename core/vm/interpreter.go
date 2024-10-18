@@ -238,6 +238,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
 	)
+
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
 	// they are returned to the pools
@@ -249,6 +250,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 
 	if contract.IsEOF() {
 		jt = in.tableEOF
+		// Set EOF entrypoint
+		pc = uint64(contract.Container.codeSectionOffsets[0])
 	} else {
 		jt = in.table
 	}
@@ -285,7 +288,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
-		op = contract.GetOp(pc, callContext.CodeSection)
+		op = contract.GetOp(pc)
 		operation := jt[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
