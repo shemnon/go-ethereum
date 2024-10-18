@@ -44,10 +44,10 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *noop) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 }
 
-func (t *noop) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
+func (t *noop) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, functondepth int, err error) {
 }
 
 func (t *noop) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {

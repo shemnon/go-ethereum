@@ -65,6 +65,7 @@ type Config struct {
 // prior to the execution of the statement.
 type StructLog struct {
 	Pc            uint64                      `json:"pc"`
+	Section       uint64                      `json:"section,omitempty"`
 	Op            vm.OpCode                   `json:"op"`
 	Gas           uint64                      `json:"gas"`
 	GasCost       uint64                      `json:"gasCost"`
@@ -74,6 +75,7 @@ type StructLog struct {
 	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
+	FunctionDepth int                         `json:"functionDepth,omitempty"`
 	RefundCounter uint64                      `json:"refund"`
 	Err           error                       `json:"-"`
 }
@@ -152,7 +154,7 @@ func (l *StructLogger) Reset() {
 // OnOpcode logs a new structured log message and pushes it out to the environment
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *StructLogger) OnOpcode(pc uint64, section uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functionDepth int, err error) {
 	// If tracing was interrupted, set the error and stop
 	if l.interrupt.Load() {
 		return
@@ -211,7 +213,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		copy(rdata, rData)
 	}
 	// create a new snapshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, len(memory), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{pc, scope.CodeSectionNum(), op, gas, cost, mem, len(memory), stck, rdata, storage, depth, scope.ReturnStackDepth(), l.env.StateDB.GetRefund(), err}
 	l.logs = append(l.logs, log)
 }
 
@@ -388,7 +390,7 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 }
 
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *mdLogger) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 	stack := scope.StackData()
 	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, vm.OpCode(op).String(), cost)
 
@@ -408,7 +410,7 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 	}
 }
 
-func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *mdLogger) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, functiondepth int, err error) {
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
@@ -426,6 +428,7 @@ type ExecutionResult struct {
 // transaction in debug mode
 type StructLogRes struct {
 	Pc            uint64             `json:"pc"`
+	Section       uint64             `json:"section,omitempty"`
 	Op            string             `json:"op"`
 	Gas           uint64             `json:"gas"`
 	GasCost       uint64             `json:"gasCost"`
@@ -436,6 +439,7 @@ type StructLogRes struct {
 	Memory        *[]string          `json:"memory,omitempty"`
 	Storage       *map[string]string `json:"storage,omitempty"`
 	RefundCounter uint64             `json:"refund,omitempty"`
+	FunctionDepth int                `json:"functionDepth,omitempty"`
 }
 
 // formatLogs formats EVM returned structured logs for json output
@@ -444,12 +448,14 @@ func formatLogs(logs []StructLog) []StructLogRes {
 	for index, trace := range logs {
 		formatted[index] = StructLogRes{
 			Pc:            trace.Pc,
+			Section:       trace.Section,
 			Op:            trace.Op.String(),
 			Gas:           trace.Gas,
 			GasCost:       trace.GasCost,
 			Depth:         trace.Depth,
 			Error:         trace.ErrorString(),
 			RefundCounter: trace.RefundCounter,
+			FunctionDepth: trace.FunctionDepth,
 		}
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))

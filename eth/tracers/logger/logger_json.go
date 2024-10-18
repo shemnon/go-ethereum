@@ -96,12 +96,12 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	return l.hooks
 }
 
-func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (l *jsonLogger) OnFault(pc uint64, section uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, functiondepth int, err error) {
 	// TODO: Add rData to this interface as well
-	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+	l.OnOpcode(pc, section, op, gas, cost, scope, nil, depth, functiondepth, err)
 }
 
-func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *jsonLogger) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 	memory := scope.MemoryData()
 	stack := scope.StackData()
 

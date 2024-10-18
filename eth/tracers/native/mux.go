@@ -77,18 +77,18 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, e
 	}, nil
 }
 
-func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *muxTracer) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnOpcode != nil {
-			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+			t.OnOpcode(pc, section, op, gas, cost, scope, rData, depth, functiondepth, err)
 		}
 	}
 }
 
-func (t *muxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *muxTracer) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, functiondepth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnFault != nil {
-			t.OnFault(pc, op, gas, cost, scope, depth, err)
+			t.OnFault(pc, section, op, gas, cost, scope, depth, functiondepth, err)
 		}
 	}
 }

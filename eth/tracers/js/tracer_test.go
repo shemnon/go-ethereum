@@ -191,10 +191,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer.Hooks})
 	tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnOpcode(0, 0, 0, 0, 0, scope, nil, 0, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnOpcode(0, 0, 0, 0, 0, scope, nil, 0, 0, nil)
 
 	if _, err := tracer.GetResult(); !strings.Contains(err.Error(), timeout.Error()) {
 		t.Errorf("Expected timeout error, got %v", err)

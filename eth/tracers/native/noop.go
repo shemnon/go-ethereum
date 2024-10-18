@@ -57,10 +57,10 @@ func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, er
 	}, nil
 }
 
-func (t *noopTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *noopTracer) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 }
 
-func (t *noopTracer) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
+func (t *noopTracer) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, functiondepth int, err error) {
 }
 
 func (t *noopTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {}

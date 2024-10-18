@@ -35,6 +35,8 @@ type OpContext interface {
 	CallValue() *uint256.Int
 	CallInput() []byte
 	ContractCode() []byte
+	CodeSectionNum() uint64
+	ReturnStackDepth() int
 }
 
 // StateDB gives tracers access to the whole state.
@@ -102,10 +104,10 @@ type (
 	ExitHook = func(depth int, output []byte, gasUsed uint64, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
-	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
+	OpcodeHook = func(pc uint64, section uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, functionDepth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
-	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
+	FaultHook = func(pc uint64, section uint64, op byte, gas, cost uint64, scope OpContext, depth int, functionDepth int, err error)
 
 	// GasChangeHook is invoked when the gas changes.
 	GasChangeHook = func(old, new uint64, reason GasChangeReason)

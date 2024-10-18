@@ -148,7 +148,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 	if interpreter.evm.Config.Tracer != nil {
 		if interpreter.evm.Config.Tracer != nil {
-			interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, nil)
+			interpreter.evm.Config.Tracer.OnOpcode(*pc, scope.CodeSectionNum(), byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, scope.ReturnStackDepth(), nil)
 		}
 	}
 	gas := scope.Contract.Gas
