@@ -290,7 +290,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		}
 		code := evm.StateDB.GetCode(addrCopy)
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
-		ret, err = evm.interpreter.Run(contract, input, false)
+		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -334,7 +334,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
 		addrCopy := addr
-		code := evm.StateDB.GetCode(addrCopy)
+		code := evm.StateDB.ResolveCode(addrCopy)
 		if fromEOF && !hasEOFMagic(code) {
 			return nil, gas, errors.New("extDelegateCall to non-eof contract")
 		}
@@ -343,7 +343,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		code := evm.StateDB.ResolveCode(addrCopy)
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
