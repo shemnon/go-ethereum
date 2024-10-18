@@ -107,11 +107,13 @@ func (l *jsonLogger) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint
 
 	log := StructLog{
 		Pc:            pc,
+		Section:       section,
 		Op:            vm.OpCode(op),
 		Gas:           gas,
 		GasCost:       cost,
 		MemorySize:    len(memory),
 		Depth:         depth,
+		FunctionDepth: functiondepth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
 	}

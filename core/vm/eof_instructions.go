@@ -81,7 +81,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if scope.Stack.len()+int(typ.maxStackHeight)-int(typ.inputs) > 1024 {
 		return nil, fmt.Errorf("stack overflow")
 	}
-	if scope.ReturnStack.Len() > 1024 {
+	if scope.ReturnStack.Len() >= 1024 {
 		return nil, fmt.Errorf("return stack overflow")
 	}
 	retCtx := &ReturnContext{
@@ -101,10 +101,6 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1
 
-	// If returning from top frame, exit cleanly.
-	if scope.ReturnStack.Len() == 0 {
-		return nil, errStopToken
-	}
 	return nil, nil
 }
 
@@ -213,10 +209,6 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, err
 	}
 
-	// Restore context
-	retCtx := scope.ReturnStack.Pop()
-	scope.CodeSection = retCtx.Section
-	*pc = retCtx.Pc - 1 // account for interpreter loop
 	return c.MarshalBinary(), errStopToken
 }
 
