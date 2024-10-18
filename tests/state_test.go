@@ -96,6 +96,7 @@ func TestExecutionSpecState(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+	st.runonly("eip7702")
 
 	st.walk(t, executionSpecStateTestDir, func(t *testing.T, name string, test *StateTest) {
 		execStateTest(t, st, test)
@@ -104,7 +105,6 @@ func TestExecutionSpecState(t *testing.T) {
 
 func execStateTest(t *testing.T, st *testMatcher, test *StateTest) {
 	for _, subtest := range test.Subtests() {
-		subtest := subtest
 		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
 		// If -short flag is used, we don't execute all four permutations, only
@@ -244,14 +244,12 @@ func runBenchmarkFile(b *testing.B, path string) {
 		return
 	}
 	for _, t := range m {
-		t := t
 		runBenchmark(b, &t)
 	}
 }
 
 func runBenchmark(b *testing.B, t *StateTest) {
 	for _, subtest := range t.Subtests() {
-		subtest := subtest
 		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 
 		b.Run(key, func(b *testing.B) {

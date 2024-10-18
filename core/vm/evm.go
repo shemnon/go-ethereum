@@ -214,7 +214,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
-		code := evm.StateDB.GetCode(addr)
+		code := evm.StateDB.ResolveCode(addr)
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(code)
 		}
@@ -225,7 +225,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+			contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false, false)
 			gas = contract.Gas
 		}
@@ -286,11 +286,11 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
 		if witness := evm.StateDB.Witness(); witness != nil {
-			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		code := evm.StateDB.GetCode(addrCopy)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
-		ret, err = evm.interpreter.Run(contract, input, false, false)
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
+		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -341,9 +341,10 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		if witness := evm.StateDB.Witness(); witness != nil {
-			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+		code := evm.StateDB.ResolveCode(addrCopy)
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
@@ -399,10 +400,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
 		if witness := evm.StateDB.Witness(); witness != nil {
-			witness.AddCode(evm.StateDB.GetCode(addrCopy))
+			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
-		code := evm.StateDB.GetCode(addrCopy)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+		code := evm.StateDB.ResolveCode(addrCopy)
+		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -505,7 +506,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// - the nonce is non-zero
 	// - the code is non-empty
 	// - the storage is non-empty
-	contractHash := evm.StateDB.GetCodeHash(address)
+	contractHash := evm.StateDB.ResolveCodeHash(address)
 	storageRoot := evm.StateDB.GetStorageRoot(address)
 	if evm.StateDB.GetNonce(address) != 0 ||
 		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
@@ -662,7 +663,6 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		GasPrice:    evm.TxContext.GasPrice,
-		ChainConfig: evm.ChainConfig(),
 		StateDB:     evm.StateDB,
 	}
 }

@@ -354,10 +354,10 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := slot.Bytes20()
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		witness.AddCode(interpreter.evm.StateDB.GetCode(address))
+		witness.AddCode(interpreter.evm.StateDB.ResolveCode(address))
 	}
 	// TODO this should not need to pull up the whole code
-	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
+	code := interpreter.evm.StateDB.ResolveCode(slot.Bytes20())
 	if isEOFVersion1(code) {
 		slot.SetUint64(2)
 	} else {
@@ -401,7 +401,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	code := interpreter.evm.StateDB.GetCode(addr)
+	code := interpreter.evm.StateDB.ResolveCode(addr)
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
 		witness.AddCode(code)
 	}
@@ -416,7 +416,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 
 // opExtCodeHash returns the code hash of a specified account.
 // There are several cases when the function is called, while we can relay everything
-// to `state.GetCodeHash` function to ensure the correctness.
+// to `state.ResolveCodeHash` function to ensure the correctness.
 //
 //  1. Caller tries to get the code hash of a normal contract account, state
 //     should return the relative code hash and set it as the result.
@@ -429,6 +429,9 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 //
 //  4. Caller tries to get the code hash of a precompiled account, the result should be
 //     zero or emptyCodeHash.
+//
+//  4. Caller tries to get the code hash of a delegated account, the result should be
+//     equal the result of calling extcodehash on the account directly.
 //
 // It is worth noting that in order to avoid unnecessary create and clean, all precompile
 // accounts on mainnet have been transferred 1 wei, so the return here should be
@@ -447,7 +450,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		slot.Clear()
 	} else {
 		// TODO this should not need to pull up the whole code
-		code := interpreter.evm.StateDB.GetCode(address)
+		code := interpreter.evm.StateDB.ResolveCode(address)
 		if HasEOFByte(code) {
 			slot.SetFromHex("0x9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5")
 		} else {
