@@ -213,11 +213,11 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		stackItem        = scope.Stack.pop()
 		offset, overflow = stackItem.Uint64WithOverflow()
 	)
-	if overflow {
+	if overflow || offset > uint64(scope.Contract.Container.dataSize) {
 		stackItem.Clear()
 		scope.Stack.push(&stackItem)
 	} else {
-		data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
+		data := getData(scope.Contract.Container.dataSection(), offset, 32)
 		scope.Stack.push(stackItem.SetBytes(data))
 	}
 	return nil, nil
@@ -228,7 +228,8 @@ func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	var (
 		offset = uint64(binary.BigEndian.Uint16(scope.Contract.Code[*pc+1:]))
 	)
-	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
+	// Container validation verifies that offset is within the dataSection bounds
+	data := getData(scope.Contract.Container.dataSection(), offset, 32)
 	scope.Stack.push(new(uint256.Int).SetBytes(data))
 	*pc += 2 // move past 2 byte immediate
 	return nil, nil
@@ -244,14 +245,22 @@ func opDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 // opDataCopy implements the DATACOPY opcode
 func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		memOffset = scope.Stack.pop()
-		offset    = scope.Stack.pop()
-		size      = scope.Stack.pop()
+		memOffset  = scope.Stack.pop()
+		dataOffset = scope.Stack.pop()
+		length     = scope.Stack.pop()
+		dataSize   = uint64(scope.Contract.Container.dataSize)
 	)
-	// These values are checked for overflow during memory expansion calculation
-	// (the memorySize function on the opcode).
-	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset.Uint64(), size.Uint64())
-	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
+	dataOffset64, overflow := dataOffset.Uint64WithOverflow()
+	if overflow || dataOffset64 > dataSize {
+		// With zero extension part of the data section, this has the same effect as setting to max int with the added
+		// safety of no overflows when adding length.
+		dataOffset64 = dataSize
+	}
+	// These values are checked for overflow during gas cost calculation
+	memOffset64 := memOffset.Uint64()
+	length64 := length.Uint64()
+	scope.Memory.Set(memOffset64, length64, getData(scope.Contract.Container.dataSection(), dataOffset64, length64))
+
 	return nil, nil
 }
 

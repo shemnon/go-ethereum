@@ -148,6 +148,10 @@ func (c *Container) dataLen() int {
 	return len(c.rawContainer) - c.dataOffest
 }
 
+func (c *Container) dataSection() []byte {
+	return c.rawContainer[c.dataOffest : c.dataOffest+c.dataSize]
+}
+
 // MarshalBinary encodes an EOF container into binary format.
 func (c *Container) MarshalBinary() []byte {
 	// Build EOF prefix.
