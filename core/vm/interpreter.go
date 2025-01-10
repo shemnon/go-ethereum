@@ -98,7 +98,11 @@ func (ctx *ScopeContext) CodeSectionNum() uint64 {
 }
 
 func (ctx *ScopeContext) ReturnStackDepth() int {
-	return ctx.ReturnStack.Len()
+	if ctx.Contract.IsEOF() {
+		return ctx.ReturnStack.Len() + 1
+	} else {
+		return 0
+	}
 }
 
 type ReturnStack []*ReturnContext
