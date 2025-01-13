@@ -149,6 +149,7 @@ func (c *Contract) GetOp(n uint64) OpCode {
 	if n < uint64(len(c.Code)) {
 		return OpCode(c.Code[n])
 	}
+
 	return STOP
 }
 

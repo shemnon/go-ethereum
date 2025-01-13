@@ -253,7 +253,7 @@ func TestValidateCode(t *testing.T) {
 			[]byte{},
 			0,
 		)
-		_, err := validateCode(test.code, test.section, &container, &pragueEOFInstructionSet, false)
+		_, err := validateCode(test.code, test.section, &container, &osakaEOFInstructionSet, false)
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}

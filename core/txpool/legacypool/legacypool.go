@@ -279,7 +279,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 // pool, specifically, whether it is a Legacy, AccessList or Dynamic transaction.
 func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 	switch tx.Type() {
-	case types.SetCodeTxType, types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType:
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType:
 		return true
 	default:
 		return false
@@ -611,8 +611,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 		Accept: 0 |
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
-			1<<types.DynamicFeeTxType |
-			1<<types.SetCodeTxType,
+			1<<types.DynamicFeeTxType,
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
 	}
@@ -627,7 +626,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
+func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptionsWithState{
 		State: pool.currentState,
 
@@ -683,7 +682,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx, isLocal); err != nil {
+	if err := pool.validateTx(tx); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
@@ -1961,4 +1960,45 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+// Clear implements txpool.SubPool, removing all tracked txs from the pool
+// and rotating the journal.
+func (pool *LegacyPool) Clear() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// unreserve each tracked account.  Ideally, we could just clear the
+	// reservation map in the parent txpool context.  However, if we clear in
+	// parent context, to avoid exposing the subpool lock, we have to lock the
+	// reservations and then lock each subpool.
+	//
+	// This creates the potential for a deadlock situation:
+	//
+	// * TxPool.Clear locks the reservations
+	// * a new transaction is received which locks the subpool mutex
+	// * TxPool.Clear attempts to lock subpool mutex
+	//
+	// The transaction addition may attempt to reserve the sender addr which
+	// can't happen until Clear releases the reservation lock.  Clear cannot
+	// acquire the subpool lock until the transaction addition is completed.
+	for _, tx := range pool.all.remotes {
+		senderAddr, _ := types.Sender(pool.signer, tx)
+		pool.reserve(senderAddr, false)
+	}
+	for localSender, _ := range pool.locals.accounts {
+		pool.reserve(localSender, false)
+	}
+
+	pool.all = newLookup()
+	pool.priced = newPricedList(pool.all)
+	pool.pending = make(map[common.Address]*list)
+	pool.queue = make(map[common.Address]*list)
+
+	if !pool.config.NoLocals && pool.config.Journal != "" {
+		pool.journal = newTxJournal(pool.config.Journal)
+		if err := pool.journal.rotate(pool.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
+	}
 }

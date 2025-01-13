@@ -148,6 +148,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	case evm.chainRules.IsVerkle:
 		// TODO replace with proper instruction set when fork is specified
 		table = &verkleInstructionSet
+	case evm.chainRules.IsPrague:
+		table = &pragueInstructionSet
 	case evm.chainRules.IsCancun:
 		table = &cancunInstructionSet
 	case evm.chainRules.IsShanghai:
@@ -242,7 +244,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 		res     []byte // result of the opcode execution function
 		debug   = in.evm.Config.Tracer != nil
 	)
-
 	// Don't move this deferred function, it's placed before the OnOpcode-deferred method,
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
 	// they are returned to the pools
@@ -301,8 +302,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
-		if !contract.UseGas(cost, in.evm.Config.Tracer, tracing.GasChangeIgnored) {
+		// for tracing: this gas consumption event is emitted below in the debug section.
+		if contract.Gas < cost {
 			return nil, ErrOutOfGas
+		} else {
+			contract.Gas -= cost
 		}
 
 		if operation.dynamicGas != nil {
@@ -331,8 +335,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			if !contract.UseGas(dynamicCost, in.evm.Config.Tracer, tracing.GasChangeIgnored) {
+			// for tracing: this gas consumption event is emitted below in the debug section.
+			if contract.Gas < dynamicCost {
 				return nil, ErrOutOfGas
+			} else {
+				contract.Gas -= dynamicCost
 			}
 
 			// Do tracing before memory expansion

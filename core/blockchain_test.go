@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 	"math/rand"
 	"os"
@@ -29,7 +30,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -37,9 +37,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -1950,11 +1952,11 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 		gspec = &Genesis{
 			Config:  &chainConfig,
-			Alloc:   types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Alloc:   types.GenesisAlloc{addr: {Balance: big.NewInt(gomath.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		signer     = types.LatestSigner(gspec.Config)
-		mergeBlock = math.MaxInt32
+		mergeBlock = gomath.MaxInt32
 	)
 	// Generate and import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil)
@@ -2237,7 +2239,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			Config:  &chainConfig,
 		}
 		engine     = beacon.New(ethash.NewFaker())
-		mergeBlock = uint64(math.MaxUint64)
+		mergeBlock = uint64(gomath.MaxUint64)
 	)
 	// Apply merging since genesis
 	if mergeHeight == 0 {
@@ -2663,12 +2665,13 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	datadir := t.TempDir()
 	ancient := path.Join(datadir, "ancient")
 
-	db, err := rawdb.Open(rawdb.OpenOptions{
-		Directory:         datadir,
-		AncientsDirectory: ancient,
-	})
+	pdb, err := pebble.New(datadir, 0, 0, "", false)
 	if err != nil {
-		t.Fatalf("Failed to create persistent database: %v", err)
+		t.Fatalf("Failed to create persistent key-value database: %v", err)
+	}
+	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	if err != nil {
+		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}
 	defer db.Close()
 
@@ -4092,7 +4095,6 @@ func TestEIP3651(t *testing.T) {
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
 	gspec.Config.TerminalTotalDifficulty = common.Big0
-	gspec.Config.TerminalTotalDifficultyPassed = true
 	gspec.Config.ShanghaiTime = u64(0)
 	signer := types.LatestSigner(gspec.Config)
 
@@ -4233,39 +4235,6 @@ func TestPragueRequests(t *testing.T) {
 	}
 }
 
-func BenchmarkReorg(b *testing.B) {
-	chainLength := b.N
-
-	dir := b.TempDir()
-	db, err := rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
-	if err != nil {
-		b.Fatalf("cannot create temporary database: %v", err)
-	}
-	defer db.Close()
-	gspec := &Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: math.BigPow(2, 254)}},
-	}
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
-	defer blockchain.Stop()
-
-	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
-	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
-
-	if _, err := blockchain.InsertChain(easyBlocks); err != nil {
-		b.Fatalf("failed to insert easy chain: %v", err)
-	}
-	b.ResetTimer()
-	if _, err := blockchain.InsertChain(diffBlocks); err != nil {
-		b.Fatalf("failed to insert difficult chain: %v", err)
-	}
-}
-
-// Master: 			BenchmarkReorg-8   	   10000	    899591 ns/op	  820154 B/op	    1440 allocs/op 	1549443072 bytes of heap used
-// WithoutOldChain: BenchmarkReorg-8   	   10000	    1147281 ns/op	  943163 B/op	    1564 allocs/op 	1163870208 bytes of heap used
-// WithoutNewChain: BenchmarkReorg-8   	   10000	   1018922 ns/op	  943580 B/op	    1564 allocs/op  1171890176 bytes of heap used
-
 // TestEIP7702 deploys two delegation designations and calls them. It writes one
 // value to storage which is verified after.
 func TestEIP7702(t *testing.T) {
@@ -4286,30 +4255,13 @@ func TestEIP7702(t *testing.T) {
 		Alloc: types.GenesisAlloc{
 			addr1: {Balance: funds},
 			addr2: {Balance: funds},
-			// The address 0xAAAA sstores 1 into slot 2.
-			aa: {
-				Code: []byte{
-					byte(vm.PC),          // [0]
-					byte(vm.DUP1),        // [0,0]
-					byte(vm.DUP1),        // [0,0,0]
-					byte(vm.DUP1),        // [0,0,0,0]
-					byte(vm.PUSH1), 0x01, // [0,0,0,0,1] (value)
-					byte(vm.PUSH20), addr2[0], addr2[1], addr2[2], addr2[3], addr2[4], addr2[5], addr2[6], addr2[7], addr2[8], addr2[9], addr2[10], addr2[11], addr2[12], addr2[13], addr2[14], addr2[15], addr2[16], addr2[17], addr2[18], addr2[19],
-					byte(vm.GAS),
-					byte(vm.CALL),
-					byte(vm.STOP),
-				},
+			aa: { // The address 0xAAAA calls into addr2
+				Code:    program.New().Call(nil, addr2, 1, 0, 0, 0, 0).Bytes(),
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
-			// The address 0xBBBB sstores 42 into slot 42.
-			bb: {
-				Code: []byte{
-					byte(vm.PUSH1), 0x42,
-					byte(vm.DUP1),
-					byte(vm.SSTORE),
-					byte(vm.STOP),
-				},
+			bb: { // The address 0xBBBB sstores 42 into slot 42.
+				Code:    program.New().Sstore(0x42, 0x42).Bytes(),
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
@@ -4317,17 +4269,20 @@ func TestEIP7702(t *testing.T) {
 	}
 
 	// Sign authorization tuples.
-	auth1, _ := types.SignAuth(&types.Authorization{
+	// The way the auths are combined, it becomes
+	// 1. tx -> addr1 which is delegated to 0xaaaa
+	// 2. addr1:0xaaaa calls into addr2:0xbbbb
+	// 3. addr2:0xbbbb  writes to storage
+	auth1, _ := types.SignSetCode(key1, types.SetCodeAuthorization{
 		ChainID: gspec.Config.ChainID.Uint64(),
 		Address: aa,
 		Nonce:   1,
-	}, key1)
-
-	auth2, _ := types.SignAuth(&types.Authorization{
+	})
+	auth2, _ := types.SignSetCode(key2, types.SetCodeAuthorization{
 		ChainID: 0,
 		Address: bb,
 		Nonce:   0,
-	}, key2)
+	})
 
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(aa)
@@ -4338,7 +4293,7 @@ func TestEIP7702(t *testing.T) {
 			Gas:       500000,
 			GasFeeCap: uint256.MustFromBig(newGwei(5)),
 			GasTipCap: uint256.NewInt(2),
-			AuthList:  []*types.Authorization{auth1, auth2},
+			AuthList:  []types.SetCodeAuthorization{auth1, auth2},
 		}
 		tx := types.MustSignNewTx(key1, signer, txdata)
 		b.AddTx(tx)

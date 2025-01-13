@@ -20,9 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -303,7 +301,7 @@ func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	)
 	offset64, overflow := offset.Uint64WithOverflow()
 	if overflow {
-		offset64 = math.MaxUint64
+		offset64 = 1<<64 - 1
 	}
 	scope.Stack.push(offset.SetBytes(getData(interpreter.returnData, offset64, 32)))
 	return nil, nil

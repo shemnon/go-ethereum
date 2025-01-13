@@ -160,9 +160,9 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
-			StateHistory:   c.StateHistory,
-			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
-			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
+			StateHistory:    c.StateHistory,
+			CleanCacheSize:  c.TrieCleanLimit * 1024 * 1024,
+			WriteBufferSize: c.TrieDirtyLimit * 1024 * 1024,
 		}
 	}
 	return config
@@ -1774,7 +1774,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if err != nil {
 			return nil, it.index, err
 		}
-		statedb.SetLogger(bc.logger)
 
 		// If we are past Byzantium, enable prefetching to pull in trie node paths
 		// while processing transactions. Before Byzantium the prefetcher is mostly
@@ -1927,7 +1926,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
 
 		// Run the stateless self-cross-validation
-		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(bc.chainConfig, task, witness)
+		crossStateRoot, crossReceiptRoot, err := ExecuteStateless(bc.chainConfig, bc.vmConfig, task, witness)
 		if err != nil {
 			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}

@@ -126,7 +126,7 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 				return ErrAlreadyReserved
 			}
 			p.reservations[addr] = subpool
-			if metrics.Enabled {
+			if metrics.Enabled() {
 				m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
 				metrics.GetOrRegisterGauge(m, nil).Inc(1)
 			}
@@ -143,7 +143,7 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 			return errors.New("address not owned")
 		}
 		delete(p.reservations, addr)
-		if metrics.Enabled {
+		if metrics.Enabled() {
 			m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
 			metrics.GetOrRegisterGauge(m, nil).Dec(1)
 		}
@@ -358,7 +358,7 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	for i, split := range splits {
 		// If the transaction was rejected by all subpools, mark it unsupported
 		if split == -1 {
-			errs[i] = core.ErrTxTypeNotSupported
+			errs[i] = fmt.Errorf("%w: received type %d", core.ErrTxTypeNotSupported, txs[i].Type())
 			continue
 		}
 		// Find which subpool handled it and pull in the corresponding error
@@ -495,5 +495,12 @@ func (p *TxPool) Sync() error {
 		return <-sync
 	case <-p.term:
 		return errors.New("pool already terminated")
+	}
+}
+
+// Clear removes all tracked txs from the subpools.
+func (p *TxPool) Clear() {
+	for _, subpool := range p.subpools {
+		subpool.Clear()
 	}
 }

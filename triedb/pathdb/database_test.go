@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/holiman/uint256"
 )
 
@@ -108,9 +107,9 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 	var (
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
-			StateHistory:   historyLimit,
-			CleanCacheSize: 16 * 1024,
-			DirtyCacheSize: 16 * 1024,
+			StateHistory:    historyLimit,
+			CleanCacheSize:  16 * 1024,
+			WriteBufferSize: 16 * 1024,
 		}, false)
 		obj = &tester{
 			db:           db,
@@ -217,13 +216,18 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 	return root
 }
 
-func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNodeSet, *triestate.Set) {
+func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNodeSet, *StateSetWithOrigin) {
 	var (
 		ctx     = newCtx(parent)
 		dirties = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 20; i++ {
-		switch rand.Intn(opLen) {
+		// Start with account creation always
+		op := createAccountOp
+		if i > 0 {
+			op = rand.Intn(opLen)
+		}
+		switch op {
 		case createAccountOp:
 			// account creation
 			addr := testrand.Address()
@@ -310,7 +314,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			delete(t.storages, addrHash)
 		}
 	}
-	return root, ctx.nodes, triestate.New(ctx.accountOrigin, ctx.storageOrigin)
+	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accounts, ctx.storages, ctx.accountOrigin, ctx.storageOrigin)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.
@@ -454,8 +458,8 @@ func TestDatabaseRecoverable(t *testing.T) {
 		// Initial state should be recoverable
 		{types.EmptyRootHash, true},
 
-		// Initial state should be recoverable
-		{common.Hash{}, true},
+		// common.Hash{} is not a valid state root for revert
+		{common.Hash{}, false},
 
 		// Layers below current disk layer are recoverable
 		{tester.roots[index-1], true},
