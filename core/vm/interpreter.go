@@ -101,7 +101,7 @@ func (ctx *ScopeContext) CurrentCodeSection() uint64 {
 // ReturnStackDepth returns the depth of the return stack.
 func (ctx *ScopeContext) ReturnStackDepth() uint64 {
 	if ctx.Contract.IsEOF() {
-		return uint64(ctx.ReturnStack.Len() + 1)
+		return uint64(ctx.ReturnStack.Len())
 	} else {
 		return 0
 	}
@@ -272,10 +272,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 				return
 			}
 			if !logged && in.evm.Config.Tracer.OnOpcode != nil {
-				in.evm.Config.Tracer.OnOpcode(pcCopy, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+				in.evm.Config.Tracer.OnOpcode(pcCopy, callContext.CodeSection, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, callContext.ReturnStackDepth(), VMErrorFromErr(err))
 			}
 			if logged && in.evm.Config.Tracer.OnFault != nil {
-				in.evm.Config.Tracer.OnFault(pcCopy, byte(op), gasCopy, cost, callContext, in.evm.depth, VMErrorFromErr(err))
+				in.evm.Config.Tracer.OnFault(pcCopy, callContext.CodeSection, byte(op), gasCopy, cost, callContext, in.evm.depth, callContext.ReturnStackDepth(), VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -354,7 +354,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 				in.evm.Config.Tracer.OnGasChange(gasCopy, gasCopy-cost, tracing.GasChangeCallOpCode)
 			}
 			if in.evm.Config.Tracer.OnOpcode != nil {
-				in.evm.Config.Tracer.OnOpcode(pc, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, VMErrorFromErr(err))
+				in.evm.Config.Tracer.OnOpcode(pc, callContext.CodeSection, byte(op), gasCopy, cost, callContext, in.returnData, in.evm.depth, callContext.ReturnStackDepth(), VMErrorFromErr(err))
 				logged = true
 			}
 		}

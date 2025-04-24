@@ -128,14 +128,14 @@ func (l *fileWritingTracer) hooks() *tracing.Hooks {
 				l.inner.OnExit(depth, output, gasUsed, err, reverted)
 			}
 		},
-		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+		OnOpcode: func(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functionDepth uint64, err error) {
 			if l.inner != nil && l.inner.OnOpcode != nil {
-				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+				l.inner.OnOpcode(pc, section, op, gas, cost, scope, rData, depth, functionDepth, err)
 			}
 		},
-		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+		OnFault: func(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, functionDepth uint64, err error) {
 			if l.inner != nil && l.inner.OnFault != nil {
-				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
+				l.inner.OnFault(pc, section, op, gas, cost, scope, depth, functionDepth, err)
 			}
 		},
 		OnSystemCallStart: func() {

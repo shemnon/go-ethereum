@@ -136,7 +136,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	subContainer := scope.Contract.Container.subContainerAt(int(idx))
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, 0, scope, interpreter.returnData, interpreter.evm.depth, nil)
+		interpreter.evm.Config.Tracer.OnOpcode(*pc, scope.CurrentCodeSection(), byte(EOFCREATE), 0, 0, scope, interpreter.returnData, interpreter.evm.depth, scope.ReturnStackDepth(), nil)
 	}
 	gas := scope.Contract.Gas
 	// Reuse last popped value from stack
@@ -186,7 +186,7 @@ func opTxCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 
 	if interpreter.evm.Config.Tracer != nil {
-		interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(TXCREATE), 0, 0, scope, interpreter.returnData, interpreter.evm.depth, nil)
+		interpreter.evm.Config.Tracer.OnOpcode(*pc, scope.CurrentCodeSection(), byte(TXCREATE), 0, 0, scope, interpreter.returnData, interpreter.evm.depth, scope.ReturnStackDepth(), nil)
 	}
 	gas := scope.Contract.Gas
 	// Apply EIP150

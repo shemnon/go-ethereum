@@ -256,7 +256,7 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 // OnOpcode logs a new structured log message and pushes it out to the environment
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *StructLogger) OnOpcode(pc uint64, section uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functionDepth uint64, err error) {
 	// If tracing was interrupted, exit
 	if l.interrupt.Load() {
 		return
@@ -492,7 +492,7 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 }
 
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *mdLogger) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth uint64, err error) {
 	if t.skip {
 		return
 	}
@@ -515,7 +515,7 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 	}
 }
 
-func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *mdLogger) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, functiondepth uint64, err error) {
 	if t.skip {
 		return
 	}

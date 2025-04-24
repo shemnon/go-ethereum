@@ -329,7 +329,7 @@ func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, 
 }
 
 // OnOpcode implements the Tracer interface to trace a single step of VM execution.
-func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *jsTracer) OnOpcode(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth uint64, err error) {
 	if !t.traceStep {
 		return
 	}
@@ -354,7 +354,7 @@ func (t *jsTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 }
 
 // OnFault implements the Tracer interface to trace an execution fault
-func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *jsTracer) OnFault(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, functiondepth uint64, err error) {
 	if t.err != nil {
 		return
 	}

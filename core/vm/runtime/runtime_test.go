@@ -667,7 +667,7 @@ func TestColdAccountAccessCost(t *testing.T) {
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Tracer: &tracing.Hooks{
-					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+					OnOpcode: func(pc uint64, section uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, functiondepth int, err error) {
 						// Uncomment to investigate failures:
 						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
 						if step == tc.step {
