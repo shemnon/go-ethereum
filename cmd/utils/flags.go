@@ -966,6 +966,24 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
 	}
+
+	// Block metrics tracer flags
+	BlockMetricsTracerFlag = &cli.BoolFlag{
+		Name:     "trace.blockmetrics",
+		Usage:    "Enable the block metrics live tracer for comprehensive block processing metrics",
+		Category: flags.MetricsCategory,
+	}
+	BlockMetricsPathFlag = &cli.StringFlag{
+		Name:     "trace.blockmetrics.path",
+		Usage:    "Directory path for block metrics output files",
+		Value:    "./metrics",
+		Category: flags.MetricsCategory,
+	}
+	BlockMetricsDetailedTxFlag = &cli.BoolFlag{
+		Name:     "trace.blockmetrics.detailed-tx",
+		Usage:    "Enable detailed per-transaction memory usage tracking (increases overhead)",
+		Category: flags.MetricsCategory,
+	}
 )
 
 var (
@@ -1850,8 +1868,27 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
 			cfg.VMTrace = name
 			cfg.VMTraceJsonConfig = ctx.String(VMTraceJsonConfigFlag.Name)
+			log.Info("Enabling live tracing via vmtrace", "name", name)
 		}
+	} else if ctx.Bool(BlockMetricsTracerFlag.Name) {
+		// Configure block metrics live tracer
+		path := ctx.String(BlockMetricsPathFlag.Name)
+		detailedTx := ctx.Bool(BlockMetricsDetailedTxFlag.Name)
+		config := map[string]interface{}{
+			"path":       path,
+			"detailedTx": detailedTx,
+		}
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			Fatalf("Failed to marshal block metrics config: %v", err)
+		}
+		cfg.VMTrace = "blockMetrics"
+		cfg.VMTraceJsonConfig = ctx.String(string(configBytes))
+		log.Info("Enabling block metrics tracing", "path", path, "detailedTX", detailedTx)
+	} else {
+		log.Info("No logging configured")
 	}
+
 }
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
@@ -2230,7 +2267,28 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
 			vmcfg.Tracer = t
+			log.Info("Enabling live tracing via vmtrace", "name", name)
 		}
+	} else if ctx.Bool(BlockMetricsTracerFlag.Name) {
+		// Configure block metrics live tracer
+		path := ctx.String(BlockMetricsPathFlag.Name)
+		detailedTx := ctx.Bool(BlockMetricsDetailedTxFlag.Name)
+		config := map[string]interface{}{
+			"path":       path,
+			"detailedTx": detailedTx,
+		}
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			Fatalf("Failed to marshal block metrics config: %v", err)
+		}
+		t, err := tracers.LiveDirectory.New("blockMetrics", configBytes)
+		if err != nil {
+			Fatalf("Failed to create block metrics tracer: %v", err)
+		}
+		log.Info("Enabling block metrics tracing", "path", path, "detailedTX", detailedTx)
+		vmcfg.Tracer = t
+	} else {
+		log.Info("No logging configured")
 	}
 	options.VmConfig = vmcfg
 
