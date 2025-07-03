@@ -46,17 +46,37 @@ type blockMetricsConfig struct {
 	Compress   bool   `json:"compress"`   // Whether to compress backup files
 }
 
+// jsonDuration wraps time.Duration to provide custom JSON marshaling as a string
+type jsonDuration time.Duration
+
+func (d jsonDuration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
+func (d *jsonDuration) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	duration, err := time.ParseDuration(str)
+	if err != nil {
+		return err
+	}
+	*d = jsonDuration(duration)
+	return nil
+}
+
 // blockMetrics represents the metrics collected for a single block
 type blockMetrics struct {
 	// Block identification
 	BlockNumber uint64      `json:"block_number"`
 	BlockHash   common.Hash `json:"block_hash"`
-	Timestamp   uint64      `json:"timestamp"`
+	Timestamp   uint64      `json:"-"`
 
 	// Timing metrics
-	ProcessingTime time.Duration `json:"processing_time_ns"`
-	StartTime      time.Time     `json:"start_time"`
-	EndTime        time.Time     `json:"end_time"`
+	ProcessingTime jsonDuration `json:"processing_time"`
+	StartTime      time.Time    `json:"-"`
+	EndTime        time.Time    `json:"-"`
 
 	// Storage metrics
 	StorageReads     uint64 `json:"storage_reads"`
@@ -64,17 +84,19 @@ type blockMetrics struct {
 	NetStorageGrowth int64  `json:"net_storage_growth"`
 
 	// Transaction metrics
-	TransactionCount uint64            `json:"transaction_count"`
-	TxMemoryUsage    []txMemoryMetrics `json:"tx_memory_usage,omitempty"`
+	TransactionCount uint64      `json:"transaction_count"`
+	TxMetrics        []txMetrics `json:"tx_metrics,omitempty"`
 
 	// Block size metrics
 	BlockSize blockSizeMetrics `json:"block_size"`
 
 	// Log/bloom metrics
-	LogCount          uint64               `json:"log_count"`
-	BloomTopics       uint64               `json:"bloom_topics"`
-	DistinctLogTopics map[common.Hash]bool `json:"-"` // Not serialized
-	UniqueLogTopics   uint64               `json:"unique_log_topics"`
+	LogCount             uint64                  `json:"log_count"`
+	LogTopicCount        uint64                  `json:"log_topic_count"`
+	DistinctLogAddresses map[common.Address]bool `json:"-"` // Not serialized
+	DistinctLogTopics    map[common.Hash]bool    `json:"-"` // Not serialized
+	UniqueLogAddresses   uint64                  `json:"unique_log_addresses"`
+	UniqueLogTopics      uint64                  `json:"unique_log_topics"`
 
 	// Memory expansion metrics
 	TotalMemoryExpansion uint64 `json:"total_memory_expansion"`
@@ -83,13 +105,19 @@ type blockMetrics struct {
 	cachedBlockEvent *tracing.BlockEvent `json:"-"`
 }
 
-// txMemoryMetrics represents per-transaction memory usage metrics
-type txMemoryMetrics struct {
-	TxHash   common.Hash `json:"tx_hash"`
-	TxIndex  int         `json:"tx_index"`
-	MLoads   uint64      `json:"mloads"`
-	MStores  uint64      `json:"mstores"`
-	MStore8s uint64      `json:"mstore8s"`
+// txMetrics represents per-transaction metrics
+type txMetrics struct {
+	MemoryExpansion    uint64 `json:"memory_expansion"`
+	LogTopicCount      uint64 `json:"log_topic_count"`
+	UniqueLogTopics    uint64 `json:"unique_log_topics"`
+	UniqueLogAddresses uint64 `json:"unique_log_addresses"`
+	StorageReads       uint64 `json:"storage_reads"`
+	StorageWrites      uint64 `json:"storage_writes"`
+	NetStorageGrowth   int64  `json:"net_storage_growth"`
+
+	// Internal tracking maps (not serialized)
+	distinctLogTopics    map[common.Hash]bool    `json:"-"`
+	distinctLogAddresses map[common.Address]bool `json:"-"`
 }
 
 // blockSizeMetrics represents block size breakdown
@@ -184,22 +212,23 @@ func newBlockMetricsTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 func (t *blockMetricsTracer) onBlockStart(event tracing.BlockEvent) {
 	t.currentBlock = event.Block
 	t.currentMetrics = &blockMetrics{
-		BlockNumber:       event.Block.Number().Uint64(),
-		BlockHash:         event.Block.Hash(),
-		Timestamp:         event.Block.Time(),
-		StartTime:         time.Now(),
-		DistinctLogTopics: make(map[common.Hash]bool),
-		TransactionCount:  uint64(len(event.Block.Transactions())),
-		cachedBlockEvent:  &event, // Cache the block event for size calculation later
+		BlockNumber:          event.Block.Number().Uint64(),
+		BlockHash:            event.Block.Hash(),
+		Timestamp:            event.Block.Time(),
+		StartTime:            time.Now(),
+		DistinctLogAddresses: make(map[common.Address]bool),
+		DistinctLogTopics:    make(map[common.Hash]bool),
+		TransactionCount:     uint64(len(event.Block.Transactions())),
+		cachedBlockEvent:     &event, // Cache the block event for size calculation later
 	}
 
 	// Initialize per-transaction metrics if detailed tracking is enabled
 	if t.config.DetailedTx {
-		t.currentMetrics.TxMemoryUsage = make([]txMemoryMetrics, len(event.Block.Transactions()))
-		for i, tx := range event.Block.Transactions() {
-			t.currentMetrics.TxMemoryUsage[i] = txMemoryMetrics{
-				TxHash:  tx.Hash(),
-				TxIndex: i,
+		t.currentMetrics.TxMetrics = make([]txMetrics, len(event.Block.Transactions()))
+		for i := range event.Block.Transactions() {
+			t.currentMetrics.TxMetrics[i] = txMetrics{
+				distinctLogTopics:    make(map[common.Hash]bool),
+				distinctLogAddresses: make(map[common.Address]bool),
 			}
 		}
 	}
@@ -216,7 +245,8 @@ func (t *blockMetricsTracer) onBlockEnd(err error) {
 
 	// Finalize metrics
 	t.currentMetrics.EndTime = time.Now()
-	t.currentMetrics.ProcessingTime = t.currentMetrics.EndTime.Sub(t.currentMetrics.StartTime)
+	t.currentMetrics.ProcessingTime = jsonDuration(t.currentMetrics.EndTime.Sub(t.currentMetrics.StartTime))
+	t.currentMetrics.UniqueLogAddresses = uint64(len(t.currentMetrics.DistinctLogAddresses))
 	t.currentMetrics.UniqueLogTopics = uint64(len(t.currentMetrics.DistinctLogTopics))
 	t.currentMetrics.TotalMemoryExpansion = t.blockMemoryAggregate
 
@@ -258,10 +288,27 @@ func (t *blockMetricsTracer) onTxEnd(receipt *types.Receipt, err error) {
 	if receipt != nil {
 		t.currentMetrics.LogCount += uint64(len(receipt.Logs))
 		for _, log := range receipt.Logs {
-			t.currentMetrics.BloomTopics += uint64(len(log.Topics))
+			t.currentMetrics.DistinctLogAddresses[log.Address] = true
+			t.currentMetrics.LogTopicCount += uint64(len(log.Topics))
 			for _, topic := range log.Topics {
 				t.currentMetrics.DistinctLogTopics[topic] = true
 			}
+		}
+
+		// Track per-transaction log metrics if detailed tracking is enabled
+		if t.config.DetailedTx && t.currentTxIndex >= 0 && t.currentTxIndex < len(t.currentMetrics.TxMetrics) {
+			tx := &t.currentMetrics.TxMetrics[t.currentTxIndex]
+			tx.LogTopicCount = uint64(len(receipt.Logs))
+			for _, log := range receipt.Logs {
+				tx.distinctLogAddresses[log.Address] = true
+				tx.LogTopicCount += uint64(len(log.Topics))
+				for _, topic := range log.Topics {
+					tx.distinctLogTopics[topic] = true
+				}
+			}
+			// Finalize unique counts
+			tx.UniqueLogAddresses = uint64(len(tx.distinctLogAddresses))
+			tx.UniqueLogTopics = uint64(len(tx.distinctLogTopics))
 		}
 	}
 
@@ -270,6 +317,11 @@ func (t *blockMetricsTracer) onTxEnd(receipt *types.Receipt, err error) {
 	// we add all call depths in case we OOGed or something similar not at the firs call
 	for depth := 0; depth < len(t.memoryUsageByDepth); depth++ {
 		t.txMemoryAggregate += t.memoryUsageByDepth[depth]
+	}
+
+	// Update per-transaction memory expansion if detailed tracking is enabled
+	if t.config.DetailedTx && t.currentTxIndex >= 0 && t.currentTxIndex < len(t.currentMetrics.TxMetrics) {
+		t.currentMetrics.TxMetrics[t.currentTxIndex].MemoryExpansion = t.txMemoryAggregate
 	}
 
 	// Add transaction memory aggregate to block aggregate
@@ -286,16 +338,24 @@ func (t *blockMetricsTracer) onStorageChange(addr common.Address, slot common.Ha
 	t.currentMetrics.StorageWrites++
 
 	// Calculate net storage growth
+	var netChange int64
 	if prev == new {
 		// not a change
 	} else if prev == (common.Hash{}) && new != (common.Hash{}) {
 		// New storage slot
-		t.currentMetrics.NetStorageGrowth++
+		netChange = 1
 	} else if prev != (common.Hash{}) && new == (common.Hash{}) {
 		// Deleted storage slot
-		t.currentMetrics.NetStorageGrowth--
+		netChange = -1
 	}
 	// If both prev and new are non-zero, it's just an update (no net change)
+
+	t.currentMetrics.NetStorageGrowth += netChange
+	// Track per-transaction storage changes if detailed tracking is enabled
+	if t.config.DetailedTx && t.currentTxIndex >= 0 && t.currentTxIndex < len(t.currentMetrics.TxMetrics) {
+		t.currentMetrics.TxMetrics[t.currentTxIndex].StorageWrites++
+		t.currentMetrics.TxMetrics[t.currentTxIndex].NetStorageGrowth += netChange
+	}
 }
 
 // onOpcode is called for every opcode execution
@@ -311,15 +371,10 @@ func (t *blockMetricsTracer) onOpcode(pc uint64, op byte, gas, cost uint64, scop
 		t.currentMetrics.StorageReads++
 	}
 
-	// Track memory operations if detailed transaction tracking is enabled
-	if t.config.DetailedTx && t.currentTxIndex >= 0 && t.currentTxIndex < len(t.currentMetrics.TxMemoryUsage) {
-		switch opcode {
-		case vm.MLOAD:
-			t.currentMetrics.TxMemoryUsage[t.currentTxIndex].MLoads++
-		case vm.MSTORE:
-			t.currentMetrics.TxMemoryUsage[t.currentTxIndex].MStores++
-		case vm.MSTORE8:
-			t.currentMetrics.TxMemoryUsage[t.currentTxIndex].MStore8s++
+	// Track per-transaction storage operations if detailed transaction tracking is enabled
+	if t.config.DetailedTx && t.currentTxIndex >= 0 && t.currentTxIndex < len(t.currentMetrics.TxMetrics) {
+		if opcode == vm.SLOAD {
+			t.currentMetrics.TxMetrics[t.currentTxIndex].StorageReads++
 		}
 	}
 
@@ -382,7 +437,8 @@ func (t *blockMetricsTracer) calculateBlockSize(block *types.Block) blockSizeMet
 
 // writeMetrics writes the metrics to the output file or console
 func (t *blockMetricsTracer) writeMetrics(metrics *blockMetrics) error {
-	// Remove the internal map before serialization
+	// Remove the internal maps before serialization
+	metrics.DistinctLogAddresses = nil
 	metrics.DistinctLogTopics = nil
 
 	if t.useConsole {
@@ -390,14 +446,14 @@ func (t *blockMetricsTracer) writeMetrics(metrics *blockMetrics) error {
 		log.Info("Block metrics",
 			"block_number", metrics.BlockNumber,
 			"block_hash", metrics.BlockHash.Hex(),
-			"timestamp", metrics.Timestamp,
-			"processing_time_ms", metrics.ProcessingTime.Milliseconds(),
+			"processing_time", time.Duration(metrics.ProcessingTime).String(),
 			"storage_reads", metrics.StorageReads,
 			"storage_writes", metrics.StorageWrites,
 			"net_storage_growth", metrics.NetStorageGrowth,
 			"transaction_count", metrics.TransactionCount,
 			"log_count", metrics.LogCount,
-			"bloom_topics", metrics.BloomTopics,
+			"log_topic_count", metrics.LogTopicCount,
+			"unique_log_addresses", metrics.UniqueLogAddresses,
 			"unique_log_topics", metrics.UniqueLogTopics,
 			"total_memory_expansion", metrics.TotalMemoryExpansion,
 			"block_size_total", metrics.BlockSize.Total,
@@ -405,22 +461,6 @@ func (t *blockMetricsTracer) writeMetrics(metrics *blockMetrics) error {
 			"block_size_transactions", metrics.BlockSize.Transactions,
 			"block_size_receipts", metrics.BlockSize.Receipts,
 		)
-
-		// Log per-transaction memory metrics if available
-		if t.config.DetailedTx && len(metrics.TxMemoryUsage) > 0 {
-			for _, txMetrics := range metrics.TxMemoryUsage {
-				if txMetrics.MLoads > 0 || txMetrics.MStores > 0 || txMetrics.MStore8s > 0 {
-					log.Info("Transaction memory metrics",
-						"block_number", metrics.BlockNumber,
-						"tx_hash", txMetrics.TxHash.Hex(),
-						"tx_index", txMetrics.TxIndex,
-						"mloads", txMetrics.MLoads,
-						"mstores", txMetrics.MStores,
-						"mstore8s", txMetrics.MStore8s,
-					)
-				}
-			}
-		}
 
 		return nil
 	} else {

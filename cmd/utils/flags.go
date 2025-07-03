@@ -976,7 +976,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	BlockMetricsPathFlag = &cli.StringFlag{
 		Name:     "trace.blockmetrics.path",
 		Usage:    "Directory path for block metrics output files",
-		Value:    "./metrics",
+		Value:    "",
 		Category: flags.MetricsCategory,
 	}
 	BlockMetricsDetailedTxFlag = &cli.BoolFlag{
@@ -1883,7 +1883,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			Fatalf("Failed to marshal block metrics config: %v", err)
 		}
 		cfg.VMTrace = "blockMetrics"
-		cfg.VMTraceJsonConfig = ctx.String(string(configBytes))
+		cfg.VMTraceJsonConfig = string(configBytes)
 		log.Info("Enabling block metrics tracing", "path", path, "detailedTX", detailedTx)
 	} else {
 		log.Info("No logging configured")
