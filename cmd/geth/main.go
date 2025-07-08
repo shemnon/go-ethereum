@@ -94,6 +94,8 @@ var (
 		utils.BlockMetricsTracerFlag,
 		utils.BlockMetricsPathFlag,
 		utils.BlockMetricsDetailedTxFlag,
+		utils.OpcodeTimerTracerFlag,
+		utils.OpcodeTimerPathFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated

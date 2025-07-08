@@ -984,6 +984,19 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Usage:    "Enable detailed per-transaction memory usage tracking (increases overhead)",
 		Category: flags.MetricsCategory,
 	}
+
+	// Opcode timer tracer flags
+	OpcodeTimerTracerFlag = &cli.BoolFlag{
+		Name:     "trace.opcodetimer",
+		Usage:    "Enable the opcode timer live tracer for opcode-level execution timing",
+		Category: flags.MetricsCategory,
+	}
+	OpcodeTimerPathFlag = &cli.StringFlag{
+		Name:     "trace.opcodetimer.path",
+		Usage:    "Directory path for opcode timer output files",
+		Value:    "",
+		Category: flags.MetricsCategory,
+	}
 )
 
 var (
@@ -1885,10 +1898,22 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.VMTrace = "blockMetrics"
 		cfg.VMTraceJsonConfig = string(configBytes)
 		log.Info("Enabling block metrics tracing", "path", path, "detailedTX", detailedTx)
+	} else if ctx.Bool(OpcodeTimerTracerFlag.Name) {
+		// Configure opcode timer live tracer
+		path := ctx.String(OpcodeTimerPathFlag.Name)
+		config := map[string]interface{}{
+			"path": path,
+		}
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			Fatalf("Failed to marshal opcode timer config: %v", err)
+		}
+		cfg.VMTrace = "opcodeTimer"
+		cfg.VMTraceJsonConfig = string(configBytes)
+		log.Info("Enabling opcode timer tracing", "path", path)
 	} else {
 		log.Info("No logging configured")
 	}
-
 }
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
@@ -2286,6 +2311,22 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			Fatalf("Failed to create block metrics tracer: %v", err)
 		}
 		log.Info("Enabling block metrics tracing", "path", path, "detailedTX", detailedTx)
+		vmcfg.Tracer = t
+	} else if ctx.Bool(OpcodeTimerTracerFlag.Name) {
+		// Configure opcode timer live tracer
+		path := ctx.String(OpcodeTimerPathFlag.Name)
+		config := map[string]interface{}{
+			"path": path,
+		}
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			Fatalf("Failed to marshal opcode timer config: %v", err)
+		}
+		t, err := tracers.LiveDirectory.New("opcodeTimer", configBytes)
+		if err != nil {
+			Fatalf("Failed to create opcode timer tracer: %v", err)
+		}
+		log.Info("Enabling opcode timer tracing", "path", path)
 		vmcfg.Tracer = t
 	} else {
 		log.Info("No logging configured")
