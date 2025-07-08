@@ -48,7 +48,8 @@ type opcodeTimerConfig struct {
 // opcodeTimerOutput represents the JSON output for a single block
 type opcodeTimerOutput struct {
 	BlockNumber uint64     `json:"block_number"`
-	OpcodeNs    [256]int64 `json:"opcode_ns"` // Array of 256 nanosecond values
+	OpcodeNs    [256]int64 `json:"opcode_ns"`    // Array of 256 nanosecond values
+	OpcodeCount [256]int64 `json:"opcode_count"` // Array of 256 execution count values
 	GasUsed     uint64     `json:"gas_used"`
 	TotalTime   int64      `json:"total_time_ns"`   // Total block processing time
 	NonEvmTime  int64      `json:"non_evm_time_ns"` // Time outside EVM execution
@@ -143,6 +144,7 @@ func (t *opcodeTimerTracer) onBlockStart(event tracing.BlockEvent) {
 	t.currentOutput = &opcodeTimerOutput{
 		BlockNumber: event.Block.Number().Uint64(),
 		OpcodeNs:    [256]int64{}, // Initialize with zeros
+		OpcodeCount: [256]int64{}, // Initialize with zeros
 		GasUsed:     0,
 		TotalTime:   0,
 		NonEvmTime:  0,
@@ -233,10 +235,11 @@ func (t *opcodeTimerTracer) onOpcode(pc uint64, op byte, gas, cost uint64, scope
 		t.totalEvmTime += duration
 	}
 
-	// Start timing for current opcode
+	// Start timing for current opcode and increment count
 	t.currentOpcode = op
 	t.currentOpcodeStart = now
 	t.hasCurrentOpcode = true
+	t.currentOutput.OpcodeCount[op]++
 }
 
 // onFault is called when an opcode execution fails
