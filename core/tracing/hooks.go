@@ -185,6 +185,9 @@ type (
 
 	// BlockHashReadHook is called when EVM reads the blockhash of a block.
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
+
+	// TrieUpdateHook is called during trie commits to pass trie data incrementally.
+	TrieUpdateHook = func(distinctReads, distinctWrites uint64, netDistinctGrowth int64)
 )
 
 type Hooks struct {
@@ -215,6 +218,8 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+	// Trie events
+	OnTrieUpdate TrieUpdateHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

@@ -101,6 +101,11 @@ type blockMetrics struct {
 	// Memory expansion metrics
 	TotalMemoryExpansion uint64 `json:"total_memory_expansion"`
 
+	// Distinct node metrics
+	DistinctReads     uint64 `json:"distinct_trie_node_reads"`
+	DistinctWrites    uint64 `json:"distinct_trie_node_writes"`
+	NetDistinctGrowth int64  `json:"net_distinct_trie_node_growth"`
+
 	// Cached block event for size calculation (not serialized)
 	cachedBlockEvent *tracing.BlockEvent `json:"-"`
 }
@@ -205,6 +210,7 @@ func newBlockMetricsTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnOpcode:        t.onOpcode,
 		OnLog:           t.onLog,
 		OnClose:         t.onClose,
+		OnTrieUpdate:    t.onTrieUpdate,
 	}, nil
 }
 
@@ -408,6 +414,16 @@ func (t *blockMetricsTracer) onClose() {
 	}
 }
 
+// onTrieUpdate is called during trie commits to pass trie data incrementally
+func (t *blockMetricsTracer) onTrieUpdate(distinctReads, distinctWrites uint64, netDistinctGrowth int64) {
+	if t.currentMetrics != nil {
+		// Set the stats from the global collector (non-accumulative since it's aggregated)
+		t.currentMetrics.DistinctReads = distinctReads
+		t.currentMetrics.DistinctWrites = distinctWrites
+		t.currentMetrics.NetDistinctGrowth = netDistinctGrowth
+	}
+}
+
 // calculateBlockSize calculates the size breakdown of a block
 func (t *blockMetricsTracer) calculateBlockSize(block *types.Block) blockSizeMetrics {
 	// This is a simplified calculation
@@ -456,6 +472,9 @@ func (t *blockMetricsTracer) writeMetrics(metrics *blockMetrics) error {
 			"unique_log_addresses", metrics.UniqueLogAddresses,
 			"unique_log_topics", metrics.UniqueLogTopics,
 			"total_memory_expansion", metrics.TotalMemoryExpansion,
+			"distinct_trie_node_reads", metrics.DistinctReads,
+			"distinct_trie_node_writes", metrics.DistinctWrites,
+			"net_distinct_trie_node_growth", metrics.NetDistinctGrowth,
 			"block_size_total", metrics.BlockSize.Total,
 			"block_size_header", metrics.BlockSize.Header,
 			"block_size_transactions", metrics.BlockSize.Transactions,

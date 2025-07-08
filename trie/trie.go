@@ -636,6 +636,16 @@ func (t *Trie) Hash() common.Hash {
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
 func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
+	// Report trie statistics before committing (and losing the tracer data)
+	if t.tracer != nil {
+		reads := uint64(len(t.tracer.accessList))
+		writes := uint64(len(t.tracer.inserts))
+		growth := int64(len(t.tracer.inserts)) - int64(len(t.tracer.deletes))
+
+		// Add statistics to the global collector
+		AddTrieStats(reads, writes, growth)
+	}
+
 	defer func() {
 		t.committed = true
 	}()

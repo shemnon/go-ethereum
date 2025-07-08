@@ -53,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -2033,9 +2034,17 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	}
 	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
 		defer func() {
+			// Capture trie statistics before notifying block end
+			if bc.logger.OnTrieUpdate != nil {
+				reads, writes, growth := trie.GetCollectedTrieStats(true) // reset after reading
+				bc.logger.OnTrieUpdate(reads, writes, growth)
+			}
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
 	}
+
+	// Start collecting trie statistics for this block
+	trie.StartTrieStatsCollection()
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
