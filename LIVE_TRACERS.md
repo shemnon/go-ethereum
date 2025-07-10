@@ -41,6 +41,9 @@ Each line contains a JSON object representing one block's metrics:
   "storage_reads": 1250,
   "storage_writes": 89,
   "net_storage_growth": 12,
+  "distinct_storage_reads": 845,
+  "distinct_storage_writes": 67,
+  "distinct_storage_change": 8,
   "transaction_count": 150,
   "log_count": 450,
   "log_topic_count": 1200,
@@ -73,6 +76,34 @@ Each line contains a JSON object representing one block's metrics:
 - **`storage_reads`**: Number of SLOAD operations across all transactions
 - **`storage_writes`**: Number of SSTORE operations across all transactions  
 - **`net_storage_growth`**: Net change in storage slots (-1 for deleted, +1 for new, 0 for updates)
+- **`distinct_storage_reads`**: Number of unique storage slots read (address + slot combinations)
+- **`distinct_storage_writes`**: Number of unique storage slots written (address + slot combinations)
+- **`distinct_storage_change`**: Net change in distinct storage slots with non-zero values
+  - `+1` for each slot that transitions from zero to non-zero
+  - `-1` for each slot that transitions from non-zero to zero
+  - `0` for slots that remain zero or change between non-zero values
+
+##### Distinct Storage Tracking Details
+
+The distinct storage metrics track unique `(contract_address, storage_slot)` combinations throughout the block:
+
+**Read Tracking (SLOAD operations)**:
+- When an SLOAD instruction executes, the tracer records the contract address and storage slot
+- For previously unseen slots, the initial value is assumed to be zero
+- Each unique `(address, slot)` combination counts as one distinct read
+
+**Write Tracking (SSTORE operations)**:
+- When an SSTORE instruction executes, the tracer records the contract address, storage slot, and values
+- The initial value is captured from the `prev` parameter of the storage change event
+- The current value is captured from the `new` parameter of the storage change event
+- Each unique `(address, slot)` combination that gets written counts as one distinct write
+
+**Change Calculation**:
+The `distinct_storage_change` metric tracks net changes in storage utilization:
+- If a slot transitions from `0x0000...` to any non-zero value: `+1`
+- If a slot transitions from any non-zero value to `0x0000...`: `-1`
+- If a slot changes between non-zero values: `0` (no net change)
+- If a slot is read but never written: no contribution to change count
 
 #### Transaction Metrics
 - **`transaction_count`**: Number of transactions in the block
