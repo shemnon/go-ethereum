@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/internal/ethapi/config"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -172,6 +173,46 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 		"txIndexRemainingBlocks": hexutil.Uint64(progress.TxIndexRemainingBlocks),
 		"stateIndexRemaining":    hexutil.Uint64(progress.StateIndexRemaining),
 	}, nil
+}
+
+// Config returns the current, next, and last fork configurations as specified by EIP-7910.
+// This method provides fork configuration information to prevent configuration mismatches
+// during hard fork transitions.
+func (api *EthereumAPI) Config(_ context.Context) (*config.EthConfigResponse, error) {
+	// Create fork configuration calculator
+	calculator := config.NewForkConfigCalculator(api.b)
+
+	// Get all configurations
+	currentConfig, currentHash, currentForkID,
+		nextConfig, nextHash, nextForkID,
+		lastConfig, lastHash, lastForkID, err := calculator.GetAll()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate fork configurations: %w", err)
+	}
+
+	// Build response
+	response := &config.EthConfigResponse{
+		Current:       currentConfig,
+		CurrentHash:   currentHash,
+		CurrentForkId: currentForkID,
+	}
+
+	// Add next configuration if available
+	if nextConfig != nil {
+		response.Next = nextConfig
+		response.NextHash = nextHash
+		response.NextForkId = nextForkID
+	}
+
+	// Add last configuration if different from current
+	if lastConfig != nil && lastHash != currentHash {
+		response.Last = lastConfig
+		response.LastHash = lastHash
+		response.LastForkId = lastForkID
+	}
+
+	return response, nil
 }
 
 // TxPoolAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
