@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/internal/ethapi/config"
+
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -192,12 +192,12 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 	blockTime := currentHeader.Time
 
 	// Get current configuration
-	currentConfig, err := config.BuildForkConfig(chainConfig, blockNumber, blockTime)
+	currentConfig, err := BuildForkConfig(chainConfig, blockNumber, blockTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build current fork config: %w", err)
 	}
 
-	currentHash, err := config.HashConfig(currentConfig)
+	currentHash, err := HashConfig(currentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash current config: %w", err)
 	}
@@ -214,14 +214,14 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 	}
 
 	// Try to get next configuration
-	nextActivationTime, err := config.GetNextForkActivationTime(chainConfig, blockTime)
+	nextActivationTime, err := GetNextForkActivationTime(chainConfig, blockTime)
 	if err == nil {
 		// Build config for next fork - estimate future block number
 		estimatedNextBlockNumber := blockNumber + ((nextActivationTime - blockTime) / 12) // Assume 12s block time
 
-		nextConfig, err := config.BuildForkConfig(chainConfig, estimatedNextBlockNumber, nextActivationTime)
+		nextConfig, err := BuildForkConfig(chainConfig, estimatedNextBlockNumber, nextActivationTime)
 		if err == nil {
-			nextHash, err := config.HashConfig(nextConfig)
+			nextHash, err := HashConfig(nextConfig)
 			if err == nil {
 				nextForkID := forkid.NewID(chainConfig, genesis, estimatedNextBlockNumber, nextActivationTime)
 				nextForkIdStr := "0x" + hex.EncodeToString(nextForkID.Hash[:])
@@ -234,14 +234,14 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 	}
 
 	// Try to get last configuration
-	lastActivationTime, err := config.GetLastKnownForkActivationTime(chainConfig)
+	lastActivationTime, err := GetLastKnownForkActivationTime(chainConfig)
 	if err == nil {
 		// For the last config, use a very high block number to ensure all features are enabled
 		maxBlockNumber := uint64(999999999)
 
-		lastConfig, err := config.BuildForkConfig(chainConfig, maxBlockNumber, lastActivationTime)
+		lastConfig, err := BuildForkConfig(chainConfig, maxBlockNumber, lastActivationTime)
 		if err == nil {
-			lastHash, err := config.HashConfig(lastConfig)
+			lastHash, err := HashConfig(lastConfig)
 			if err == nil && lastHash != currentHash {
 				lastForkID := forkid.NewID(chainConfig, genesis, maxBlockNumber, lastActivationTime)
 				lastForkIdStr := "0x" + hex.EncodeToString(lastForkID.Hash[:])
