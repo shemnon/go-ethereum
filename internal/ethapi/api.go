@@ -179,13 +179,10 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 // This method provides fork configuration information to prevent configuration mismatches
 // during hard fork transitions.
 func (api *EthereumAPI) Config(_ context.Context) (*config.EthConfigResponse, error) {
-	// Create fork configuration calculator
-	calculator := config.NewForkConfigCalculator(api.b)
-
 	// Get all configurations
 	currentConfig, currentHash, currentForkID,
 		nextConfig, nextHash, nextForkID,
-		lastConfig, lastHash, lastForkID, err := calculator.GetAll()
+		lastConfig, lastHash, lastForkID, err := config.GetAll(api.b.ChainConfig(), api.b.CurrentHeader(), api.b.Genesis())
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate fork configurations: %w", err)
@@ -198,15 +195,15 @@ func (api *EthereumAPI) Config(_ context.Context) (*config.EthConfigResponse, er
 		CurrentForkId: currentForkID,
 	}
 
-	// Add next configuration if available
-	if nextConfig != nil {
+	// Add next configuration if available (check for non-empty hash)
+	if nextHash != "" {
 		response.Next = nextConfig
 		response.NextHash = nextHash
 		response.NextForkId = nextForkID
 	}
 
 	// Add last configuration if different from current
-	if lastConfig != nil && lastHash != currentHash {
+	if lastHash != "" && lastHash != currentHash {
 		response.Last = lastConfig
 		response.LastHash = lastHash
 		response.LastForkId = lastForkID

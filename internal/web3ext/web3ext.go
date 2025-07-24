@@ -573,6 +573,11 @@ web3._extend({
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
+			name: 'config',
+			call: 'eth_config',
+			params: 0,
+		}),
+		new web3._extend.Method({
 			name: 'feeHistory',
 			call: 'eth_feeHistory',
 			params: 3,
