@@ -86,6 +86,7 @@ type Backend interface {
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig
+	Genesis() *types.Block
 	Engine() consensus.Engine
 	HistoryPruningCutoff() uint64
 

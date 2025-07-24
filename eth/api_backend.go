@@ -57,6 +57,11 @@ func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.blockchain.Config()
 }
 
+// Genesis returns the genesis block.
+func (b *EthAPIBackend) Genesis() *types.Block {
+	return b.eth.blockchain.Genesis()
+}
+
 func (b *EthAPIBackend) CurrentBlock() *types.Header {
 	return b.eth.blockchain.CurrentBlock()
 }

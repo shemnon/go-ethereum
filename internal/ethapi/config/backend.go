@@ -29,4 +29,28 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	CurrentHeader() *types.Header
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	Genesis() *types.Block
+}
+
+// blockchainAdapter adapts ethapi.Backend to implement forkid.Blockchain
+type blockchainAdapter struct {
+	backend Backend
+}
+
+// NewBlockchainAdapter creates an adapter that implements forkid.Blockchain from ethapi.Backend
+func NewBlockchainAdapter(backend Backend) *blockchainAdapter {
+	return &blockchainAdapter{backend: backend}
+}
+
+func (a *blockchainAdapter) Config() *params.ChainConfig {
+	return a.backend.ChainConfig()
+}
+
+func (a *blockchainAdapter) CurrentHeader() *types.Header {
+	return a.backend.CurrentHeader()
+}
+
+func (a *blockchainAdapter) Genesis() *types.Block {
+	// Get genesis block using BlockByNumber(0)
+	return a.backend.Genesis()
 }

@@ -61,18 +61,11 @@ func (calc *ForkConfigCalculator) GetCurrentConfig() (*ForkConfig, string, *fork
 		return nil, "", nil, fmt.Errorf("failed to hash current config: %w", err)
 	}
 
-	// Try to calculate fork ID, but don't fail if genesis is unavailable (pruned node)
-	var forkID *forkid.ID
-	genesis, err := calc.backend.BlockByNumber(context.Background(), 0)
-	if err != nil {
-		// Genesis block not available (likely pruned node) - fork ID will be nil
-		forkID = nil
-	} else {
-		id := forkid.NewID(calc.chainConfig, genesis, blockNumber, blockTime)
-		forkID = &id
-	}
+	// Use geth's existing fork ID calculation with adapter
+	blockchainAdapter := NewBlockchainAdapter(calc.backend)
+	forkID := forkid.NewIDWithChain(blockchainAdapter)
 
-	return config, hash, forkID, nil
+	return config, hash, &forkID, nil
 }
 
 // GetNextConfig returns the configuration for the next scheduled fork
@@ -106,18 +99,14 @@ func (calc *ForkConfigCalculator) GetNextConfig() (*ForkConfig, string, *forkid.
 		return nil, "", nil, fmt.Errorf("failed to hash next config: %w", err)
 	}
 
-	// Try to calculate fork ID for next configuration, but don't fail if genesis is unavailable
-	var nextForkID *forkid.ID
+	// Calculate fork ID for next configuration using estimated block/time
 	genesis, err := calc.backend.BlockByNumber(context.Background(), 0)
 	if err != nil {
-		// Genesis block not available (likely pruned node) - fork ID will be nil
-		nextForkID = nil
-	} else {
-		id := forkid.NewID(calc.chainConfig, genesis, estimatedNextBlockNumber, nextActivationTime)
-		nextForkID = &id
+		return nil, "", nil, fmt.Errorf("failed to get genesis block: %w", err)
 	}
+	nextForkID := forkid.NewID(calc.chainConfig, genesis, estimatedNextBlockNumber, nextActivationTime)
 
-	return nextConfig, hash, nextForkID, nil
+	return nextConfig, hash, &nextForkID, nil
 }
 
 // GetLastConfig returns the configuration for the last known fork
@@ -144,18 +133,14 @@ func (calc *ForkConfigCalculator) GetLastConfig() (*ForkConfig, string, *forkid.
 		return nil, "", nil, fmt.Errorf("failed to hash last config: %w", err)
 	}
 
-	// Try to calculate fork ID for last configuration, but don't fail if genesis is unavailable
-	var lastForkID *forkid.ID
+	// Calculate fork ID for last configuration using high future block/time
 	genesis, err := calc.backend.BlockByNumber(context.Background(), 0)
 	if err != nil {
-		// Genesis block not available (likely pruned node) - fork ID will be nil
-		lastForkID = nil
-	} else {
-		id := forkid.NewID(calc.chainConfig, genesis, maxBlockNumber, lastActivationTime)
-		lastForkID = &id
+		return nil, "", nil, fmt.Errorf("failed to get genesis block: %w", err)
 	}
+	lastForkID := forkid.NewID(calc.chainConfig, genesis, maxBlockNumber, lastActivationTime)
 
-	return lastConfig, hash, lastForkID, nil
+	return lastConfig, hash, &lastForkID, nil
 }
 
 // buildForkConfig constructs a complete fork configuration for the given block number and time

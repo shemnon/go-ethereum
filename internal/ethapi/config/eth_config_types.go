@@ -26,7 +26,7 @@ import (
 type EthConfigResponse struct {
 	Current       *ForkConfig `json:"current"`
 	CurrentHash   string      `json:"currentHash"`
-	CurrentForkId *forkid.ID  `json:"currentForkId,omitempty"`
+	CurrentForkId *forkid.ID  `json:"currentForkId"`
 	Next          *ForkConfig `json:"next,omitempty"`
 	NextHash      string      `json:"nextHash,omitempty"`
 	NextForkId    *forkid.ID  `json:"nextForkId,omitempty"`
