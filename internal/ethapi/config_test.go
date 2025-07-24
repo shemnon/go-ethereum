@@ -47,9 +47,9 @@ func TestHashConfig(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Verify hash format
@@ -77,14 +77,14 @@ func TestHashConfigConsistency(t *testing.T) {
 		SystemContracts: map[string]common.Address{},
 	}
 
-	hash1, err := HashConfig(config)
+	hash1, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("First HashConfig failed: %v", err)
+		t.Fatalf("First hashConfig failed: %v", err)
 	}
 
-	hash2, err := HashConfig(config)
+	hash2, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("Second HashConfig failed: %v", err)
+		t.Fatalf("Second hashConfig failed: %v", err)
 	}
 
 	if hash1 != hash2 {
@@ -122,14 +122,14 @@ func TestHashConfigDifferentConfigs(t *testing.T) {
 		SystemContracts: map[string]common.Address{},
 	}
 
-	hash1, err := HashConfig(config1)
+	hash1, err := hashConfig(config1)
 	if err != nil {
-		t.Fatalf("First HashConfig failed: %v", err)
+		t.Fatalf("First hashConfig failed: %v", err)
 	}
 
-	hash2, err := HashConfig(config2)
+	hash2, err := hashConfig(config2)
 	if err != nil {
-		t.Fatalf("Second HashConfig failed: %v", err)
+		t.Fatalf("Second hashConfig failed: %v", err)
 	}
 
 	if hash1 == hash2 {
@@ -138,7 +138,7 @@ func TestHashConfigDifferentConfigs(t *testing.T) {
 }
 
 func TestHashConfigNilConfig(t *testing.T) {
-	_, err := HashConfig(nil)
+	_, err := hashConfig(nil)
 	if err == nil {
 		t.Error("Expected error for nil config, got nil")
 	}
@@ -165,9 +165,9 @@ func TestHashConfig_HomesteadFork(t *testing.T) {
 		SystemContracts: map[string]common.Address{},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Expected hash should be deterministic
@@ -204,9 +204,9 @@ func TestHashConfig_CancunFork(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Expected hash should be deterministic
@@ -254,9 +254,9 @@ func TestHashConfig_PragueFork(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Expected hash should be deterministic
@@ -293,9 +293,9 @@ func TestHashConfig_TestnetConfig(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Expected hash should be deterministic
@@ -315,9 +315,9 @@ func TestHashConfig_EmptyConfig(t *testing.T) {
 		SystemContracts: map[string]common.Address{},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	// Expected hash should be deterministic
@@ -370,14 +370,14 @@ func TestHashConfig_FieldOrderIndependence(t *testing.T) {
 		},
 	}
 
-	hash1, err := HashConfig(config1)
+	hash1, err := hashConfig(config1)
 	if err != nil {
-		t.Fatalf("First HashConfig failed: %v", err)
+		t.Fatalf("First hashConfig failed: %v", err)
 	}
 
-	hash2, err := HashConfig(config2)
+	hash2, err := hashConfig(config2)
 	if err != nil {
-		t.Fatalf("Second HashConfig failed: %v", err)
+		t.Fatalf("Second hashConfig failed: %v", err)
 	}
 
 	if hash1 != hash2 {
@@ -413,9 +413,9 @@ func TestHashConfig_EIP7910_Sample1(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	expectedHash := "0x919b73b0"
@@ -461,9 +461,9 @@ func TestHashConfig_EIP7910_Sample2(t *testing.T) {
 		},
 	}
 
-	hash, err := HashConfig(config)
+	hash, err := hashConfig(config)
 	if err != nil {
-		t.Fatalf("HashConfig failed: %v", err)
+		t.Fatalf("hashConfig failed: %v", err)
 	}
 
 	expectedHash := "0xd80b437d"
@@ -645,7 +645,7 @@ func TestExtractBlobSchedule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExtractBlobSchedule(tt.chainConfig, tt.blockNumber, tt.blockTime)
+			result := extractBlobSchedule(tt.chainConfig, tt.blockNumber, tt.blockTime)
 
 			if result.BaseFeeUpdateFraction != tt.expected.BaseFeeUpdateFraction {
 				t.Errorf("BaseFeeUpdateFraction = %d, want %d", result.BaseFeeUpdateFraction, tt.expected.BaseFeeUpdateFraction)
@@ -672,7 +672,7 @@ func TestGetActivePrecompiles(t *testing.T) {
 		IsBerlin: false,
 	}
 
-	homesteadPrecompiles := GetActivePrecompiles(homesteadRules)
+	homesteadPrecompiles := getActivePrecompiles(homesteadRules)
 	expected := map[string]string{
 		"0x0000000000000000000000000000000000000001": "ECREC",
 		"0x0000000000000000000000000000000000000002": "SHA256",
@@ -750,7 +750,7 @@ func TestGetActivePrecompilesForFork(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			precompiles := GetActivePrecompilesForFork(chainConfig, tt.blockNumber, tt.blockTime)
+			precompiles := getActivePrecompilesForFork(chainConfig, tt.blockNumber, tt.blockTime)
 
 			if len(precompiles) != tt.expectedLen {
 				t.Errorf("Expected %d precompiles, got %d", tt.expectedLen, len(precompiles))
@@ -973,13 +973,13 @@ func TestCanonicalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := CanonicalJSON(tt.input)
+			result, err := canonicalJSON(tt.input)
 			if err != nil {
-				t.Fatalf("CanonicalJSON failed: %v", err)
+				t.Fatalf("canonicalJSON failed: %v", err)
 			}
 
 			if string(result) != tt.expected {
-				t.Errorf("CanonicalJSON() = %q, want %q", string(result), tt.expected)
+				t.Errorf("canonicalJSON() = %q, want %q", string(result), tt.expected)
 			}
 		})
 	}
@@ -1011,13 +1011,13 @@ func TestCanonicalJSONStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := CanonicalJSON(tt.input)
+			result, err := canonicalJSON(tt.input)
 			if err != nil {
-				t.Fatalf("CanonicalJSON failed: %v", err)
+				t.Fatalf("canonicalJSON failed: %v", err)
 			}
 
 			if string(result) != tt.expected {
-				t.Errorf("CanonicalJSON() = %q, want %q", string(result), tt.expected)
+				t.Errorf("canonicalJSON() = %q, want %q", string(result), tt.expected)
 			}
 		})
 	}
@@ -1041,16 +1041,16 @@ func TestCanonicalJSONForkConfig(t *testing.T) {
 		},
 	}
 
-	result, err := CanonicalJSON(config)
+	result, err := canonicalJSON(config)
 	if err != nil {
-		t.Fatalf("CanonicalJSON failed: %v", err)
+		t.Fatalf("canonicalJSON failed: %v", err)
 	}
 
 	// Verify that the JSON is properly ordered and formatted
 	expected := `{"activationTime":1234567890,"blobSchedule":{"baseFeeUpdateFraction":3338477,"max":6,"target":3},"chainId":"0x1","precompiles":{"0x0000000000000000000000000000000000000001":"ECREC","0x0000000000000000000000000000000000000002":"SHA256"},"systemContracts":{"BEACON_ROOTS_ADDRESS":"0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02"}}`
 
 	if string(result) != expected {
-		t.Errorf("CanonicalJSON() for ForkConfig:\ngot:  %s\nwant: %s", string(result), expected)
+		t.Errorf("canonicalJSON() for ForkConfig:\ngot:  %s\nwant: %s", string(result), expected)
 	}
 }
 
@@ -1062,17 +1062,17 @@ func TestCanonicalJSONConsistency(t *testing.T) {
 		"b": 2,
 	}
 
-	result1, err := CanonicalJSON(config)
+	result1, err := canonicalJSON(config)
 	if err != nil {
-		t.Fatalf("First CanonicalJSON failed: %v", err)
+		t.Fatalf("First canonicalJSON failed: %v", err)
 	}
 
-	result2, err := CanonicalJSON(config)
+	result2, err := canonicalJSON(config)
 	if err != nil {
-		t.Fatalf("Second CanonicalJSON failed: %v", err)
+		t.Fatalf("Second canonicalJSON failed: %v", err)
 	}
 
 	if string(result1) != string(result2) {
-		t.Errorf("CanonicalJSON results differ: %s != %s", string(result1), string(result2))
+		t.Errorf("canonicalJSON results differ: %s != %s", string(result1), string(result2))
 	}
 }

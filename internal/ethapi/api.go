@@ -197,7 +197,7 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 		return nil, fmt.Errorf("failed to build current fork config: %w", err)
 	}
 
-	currentHash, err := HashConfig(currentConfig)
+	currentHash, err := hashConfig(currentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash current config: %w", err)
 	}
@@ -221,7 +221,7 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 
 		nextConfig, err := BuildForkConfig(chainConfig, estimatedNextBlockNumber, nextActivationTime)
 		if err == nil {
-			nextHash, err := HashConfig(nextConfig)
+			nextHash, err := hashConfig(nextConfig)
 			if err == nil {
 				nextForkID := forkid.NewID(chainConfig, genesis, estimatedNextBlockNumber, nextActivationTime)
 				nextForkIdStr := "0x" + hex.EncodeToString(nextForkID.Hash[:])
@@ -241,7 +241,7 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 
 		lastConfig, err := BuildForkConfig(chainConfig, maxBlockNumber, lastActivationTime)
 		if err == nil {
-			lastHash, err := HashConfig(lastConfig)
+			lastHash, err := hashConfig(lastConfig)
 			if err == nil && lastHash != currentHash {
 				lastForkID := forkid.NewID(chainConfig, genesis, maxBlockNumber, lastActivationTime)
 				lastForkIdStr := "0x" + hex.EncodeToString(lastForkID.Hash[:])

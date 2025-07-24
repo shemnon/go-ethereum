@@ -91,7 +91,7 @@ const (
 // BuildForkConfig constructs a complete fork configuration for the given block number and time
 func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) (*ForkConfig, error) {
 	// Calculate activation time for this fork
-	activationTime, err := CalculateActivationTimeForFork(chainConfig, blockNumber, blockTime)
+	activationTime, err := calculateActivationTimeForFork(chainConfig, blockNumber, blockTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate activation time: %w", err)
 	}
@@ -102,10 +102,10 @@ func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockT
 	// Build configuration
 	config := &ForkConfig{
 		ActivationTime:  activationTime,
-		BlobSchedule:    ExtractBlobSchedule(chainConfig, blockNumber, blockTime),
+		BlobSchedule:    extractBlobSchedule(chainConfig, blockNumber, blockTime),
 		ChainID:         fmt.Sprintf("0x%x", chainConfig.ChainID.Uint64()),
-		Precompiles:     GetActivePrecompiles(rules),
-		SystemContracts: GetSystemContracts(rules, chainConfig),
+		Precompiles:     getActivePrecompiles(rules),
+		SystemContracts: getSystemContracts(rules, chainConfig),
 	}
 
 	return config, nil
@@ -115,15 +115,15 @@ func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockT
 // Configuration Hashing
 // ============================================================================
 
-// HashConfig computes the CRC-32 hash of a fork configuration as specified by EIP-7910.
+// hashConfig computes the CRC-32 hash of a fork configuration as specified by EIP-7910.
 // The configuration is first serialized to canonical JSON (RFC-8785) and then hashed.
-func HashConfig(config *ForkConfig) (string, error) {
+func hashConfig(config *ForkConfig) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("config cannot be nil")
 	}
 
 	// Serialize to canonical JSON
-	canonical, err := CanonicalJSON(config)
+	canonical, err := canonicalJSON(config)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize config to canonical JSON: %w", err)
 	}
@@ -139,13 +139,13 @@ func HashConfig(config *ForkConfig) (string, error) {
 // Canonical JSON Implementation (RFC-8785)
 // ============================================================================
 
-// CanonicalJSON produces canonical JSON as per RFC-8785 for deterministic hashing.
+// canonicalJSON produces canonical JSON as per RFC-8785 for deterministic hashing.
 // This implementation ensures:
 // - No whitespace except inside strings
 // - Object keys sorted lexicographically
 // - Numeric values in simplest form
 // - No trailing zeros after decimal point
-func CanonicalJSON(v interface{}) ([]byte, error) {
+func canonicalJSON(v interface{}) ([]byte, error) {
 	return canonicalMarshal(reflect.ValueOf(v))
 }
 
@@ -397,9 +397,9 @@ func isEmptyValue(v reflect.Value) bool {
 // System Contracts
 // ============================================================================
 
-// GetSystemContracts returns the system contract addresses for the given chain rules
+// getSystemContracts returns the system contract addresses for the given chain rules
 // formatted for EIP-7910 eth_config response.
-func GetSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map[string]common.Address {
+func getSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map[string]common.Address {
 	contracts := make(map[string]common.Address)
 
 	// EIP-4788: Beacon block root in the EVM (activated in Cancun)
@@ -434,9 +434,9 @@ func GetSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map
 // Precompiles
 // ============================================================================
 
-// GetActivePrecompiles returns a map of precompile addresses to their names
+// getActivePrecompiles returns a map of precompile addresses to their names
 // for the given chain rules, formatted for EIP-7910 eth_config response.
-func GetActivePrecompiles(rules params.Rules) map[string]string {
+func getActivePrecompiles(rules params.Rules) map[string]string {
 	addresses := vm.ActivePrecompiles(rules)
 	precompiles := make(map[string]string, len(addresses))
 
@@ -452,9 +452,9 @@ func GetActivePrecompiles(rules params.Rules) map[string]string {
 
 // GetActivePrecompilesForFork returns the active precompiles for a specific fork
 // based on chain configuration and activation time or block number.
-func GetActivePrecompilesForFork(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) map[string]string {
+func getActivePrecompilesForFork(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) map[string]string {
 	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
-	return GetActivePrecompiles(rules)
+	return getActivePrecompiles(rules)
 }
 
 // getPrecompileName returns the canonical name for a precompile address as defined by EIP-7910
@@ -535,8 +535,8 @@ func isAddressEqual(fullAddr []byte, suffix []byte) bool {
 // Activation Time Calculation
 // ============================================================================
 
-// CalculateActivationTimeForFork calculates the activation time for a specific fork
-func CalculateActivationTimeForFork(chainConfig *params.ChainConfig, targetBlockNumber uint64, targetBlockTime uint64) (uint64, error) {
+// calculateActivationTimeForFork calculates the activation time for a specific fork
+func calculateActivationTimeForFork(chainConfig *params.ChainConfig, targetBlockNumber uint64, targetBlockTime uint64) (uint64, error) {
 	return determineActivationTime(chainConfig, targetBlockNumber, targetBlockTime)
 }
 
@@ -661,9 +661,9 @@ func GetLastKnownForkActivationTime(chainConfig *params.ChainConfig) (uint64, er
 // Blob Configuration
 // ============================================================================
 
-// ExtractBlobSchedule extracts blob configuration parameters for a specific fork
+// extractBlobSchedule extracts blob configuration parameters for a specific fork
 // based on chain configuration and activation rules.
-func ExtractBlobSchedule(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) BlobScheduleParams {
+func extractBlobSchedule(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) BlobScheduleParams {
 	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
 
 	// Default blob schedule (pre-EIP-4844)

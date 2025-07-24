@@ -321,6 +321,7 @@ func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int { return big.New
 
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
+func (b *backendMock) Genesis() *types.Block            { return b.Genesis() }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress(ctx context.Context) ethereum.SyncProgress {
