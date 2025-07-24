@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -179,34 +180,77 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 // This method provides fork configuration information to prevent configuration mismatches
 // during hard fork transitions.
 func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error) {
-	// Get all configurations
-	currentConfig, currentHash, currentForkID,
-		nextConfig, nextHash, nextForkID,
-		lastConfig, lastHash, lastForkID, err := config.GetAll(api.b.ChainConfig(), api.b.CurrentHeader(), api.b.Genesis())
+	chainConfig := api.b.ChainConfig()
+	currentHeader := api.b.CurrentHeader()
+	genesis := api.b.Genesis()
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate fork configurations: %w", err)
+	if currentHeader == nil {
+		return nil, fmt.Errorf("cannot get current header")
 	}
+
+	blockNumber := currentHeader.Number.Uint64()
+	blockTime := currentHeader.Time
+
+	// Get current configuration
+	currentConfig, err := config.BuildForkConfig(chainConfig, blockNumber, blockTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build current fork config: %w", err)
+	}
+
+	currentHash, err := config.HashConfig(currentConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash current config: %w", err)
+	}
+
+	// Use geth's existing fork ID calculation for current
+	currentForkID := forkid.NewID(chainConfig, genesis, blockNumber, blockTime)
+	currentForkIdStr := "0x" + hex.EncodeToString(currentForkID.Hash[:])
 
 	// Build response map
 	response := map[string]interface{}{
-		"current":       currentConfig,
+		"current":       *currentConfig,
 		"currentHash":   currentHash,
-		"currentForkId": currentForkID,
+		"currentForkId": currentForkIdStr,
 	}
 
-	// Add next configuration if available (check for non-empty hash)
-	if nextHash != "" {
-		response["next"] = nextConfig
-		response["nextHash"] = nextHash
-		response["nextForkId"] = nextForkID
+	// Try to get next configuration
+	nextActivationTime, err := config.GetNextForkActivationTime(chainConfig, blockTime)
+	if err == nil {
+		// Build config for next fork - estimate future block number
+		estimatedNextBlockNumber := blockNumber + ((nextActivationTime - blockTime) / 12) // Assume 12s block time
+
+		nextConfig, err := config.BuildForkConfig(chainConfig, estimatedNextBlockNumber, nextActivationTime)
+		if err == nil {
+			nextHash, err := config.HashConfig(nextConfig)
+			if err == nil {
+				nextForkID := forkid.NewID(chainConfig, genesis, estimatedNextBlockNumber, nextActivationTime)
+				nextForkIdStr := "0x" + hex.EncodeToString(nextForkID.Hash[:])
+
+				response["next"] = *nextConfig
+				response["nextHash"] = nextHash
+				response["nextForkId"] = nextForkIdStr
+			}
+		}
 	}
 
-	// Add last configuration if different from current
-	if lastHash != "" && lastHash != currentHash {
-		response["last"] = lastConfig
-		response["lastHash"] = lastHash
-		response["lastForkId"] = lastForkID
+	// Try to get last configuration
+	lastActivationTime, err := config.GetLastKnownForkActivationTime(chainConfig)
+	if err == nil {
+		// For the last config, use a very high block number to ensure all features are enabled
+		maxBlockNumber := uint64(999999999)
+
+		lastConfig, err := config.BuildForkConfig(chainConfig, maxBlockNumber, lastActivationTime)
+		if err == nil {
+			lastHash, err := config.HashConfig(lastConfig)
+			if err == nil && lastHash != currentHash {
+				lastForkID := forkid.NewID(chainConfig, genesis, maxBlockNumber, lastActivationTime)
+				lastForkIdStr := "0x" + hex.EncodeToString(lastForkID.Hash[:])
+
+				response["last"] = *lastConfig
+				response["lastHash"] = lastHash
+				response["lastForkId"] = lastForkIdStr
+			}
+		}
 	}
 
 	return response, nil
