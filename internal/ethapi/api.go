@@ -178,7 +178,7 @@ func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
 // Config returns the current, next, and last fork configurations as specified by EIP-7910.
 // This method provides fork configuration information to prevent configuration mismatches
 // during hard fork transitions.
-func (api *EthereumAPI) Config(_ context.Context) (*config.EthConfigResponse, error) {
+func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error) {
 	// Get all configurations
 	currentConfig, currentHash, currentForkID,
 		nextConfig, nextHash, nextForkID,
@@ -188,25 +188,25 @@ func (api *EthereumAPI) Config(_ context.Context) (*config.EthConfigResponse, er
 		return nil, fmt.Errorf("failed to calculate fork configurations: %w", err)
 	}
 
-	// Build response
-	response := &config.EthConfigResponse{
-		Current:       currentConfig,
-		CurrentHash:   currentHash,
-		CurrentForkId: currentForkID,
+	// Build response map
+	response := map[string]interface{}{
+		"current":       currentConfig,
+		"currentHash":   currentHash,
+		"currentForkId": currentForkID,
 	}
 
 	// Add next configuration if available (check for non-empty hash)
 	if nextHash != "" {
-		response.Next = nextConfig
-		response.NextHash = nextHash
-		response.NextForkId = nextForkID
+		response["next"] = nextConfig
+		response["nextHash"] = nextHash
+		response["nextForkId"] = nextForkID
 	}
 
 	// Add last configuration if different from current
 	if lastHash != "" && lastHash != currentHash {
-		response.Last = lastConfig
-		response.LastHash = lastHash
-		response.LastForkId = lastForkID
+		response["last"] = lastConfig
+		response["lastHash"] = lastHash
+		response["lastForkId"] = lastForkID
 	}
 
 	return response, nil

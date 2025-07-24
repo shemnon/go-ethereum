@@ -20,20 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// EthConfigResponse represents the response structure for the eth_config JSON-RPC method
-// as specified by EIP-7910.
-type EthConfigResponse struct {
-	Current       ForkConfig `json:"current"`
-	CurrentHash   string     `json:"currentHash"`
-	CurrentForkId string     `json:"currentForkId"`
-	Next          ForkConfig `json:"next,omitempty"`
-	NextHash      string     `json:"nextHash,omitempty"`
-	NextForkId    string     `json:"nextForkId,omitempty"`
-	Last          ForkConfig `json:"last,omitempty"`
-	LastHash      string     `json:"lastHash,omitempty"`
-	LastForkId    string     `json:"lastForkId,omitempty"`
-}
-
 // ForkConfig represents the configuration of a specific fork as defined by EIP-7910.
 // All fields are required and must be present in canonical order for proper hashing.
 type ForkConfig struct {

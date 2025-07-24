@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi/config"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -399,8 +398,8 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 }
 
 // EthConfig returns the current, next, and last fork configurations as specified by EIP-7910.
-func (ec *Client) EthConfig(ctx context.Context) (*config.EthConfigResponse, error) {
-	var result *config.EthConfigResponse
+func (ec *Client) EthConfig(ctx context.Context) (map[string]interface{}, error) {
+	var result map[string]interface{}
 	if err := ec.c.CallContext(ctx, &result, "eth_config"); err != nil {
 		return nil, err
 	}
