@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"math/big"
 	"reflect"
 	"sort"
@@ -63,26 +64,27 @@ const (
 	DepositContractAddressName               = "DEPOSIT_CONTRACT_ADDRESS"
 )
 
-// PrecompileName constants for the known precompiles as defined by EIP-7910
-const (
-	PrecompileECREC                = "ECREC"
-	PrecompileSHA256               = "SHA256"
-	PrecompileRIPEMD160            = "RIPEMD160"
-	PrecompileID                   = "ID"
-	PrecompileMODEXP               = "MODEXP"
-	PrecompileBN254_ADD            = "BN254_ADD"
-	PrecompileBN254_MUL            = "BN254_MUL"
-	PrecompileBN254_PAIRING        = "BN254_PAIRING"
-	PrecompileBLAKE2F              = "BLAKE2F"
-	PrecompileKZG_POINT_EVALUATION = "KZG_POINT_EVALUATION"
-	PrecompileBLS12_G1ADD          = "BLS12_G1ADD"
-	PrecompileBLS12_G1MSM          = "BLS12_G1MSM"
-	PrecompileBLS12_G2ADD          = "BLS12_G2ADD"
-	PrecompileBLS12_G2MSM          = "BLS12_G2MSM"
-	PrecompileBLS12_PAIRING_CHECK  = "BLS12_PAIRING_CHECK"
-	PrecompileBLS12_MAP_FP_TO_G1   = "BLS12_MAP_FP_TO_G1"
-	PrecompileBLS12_MAP_FP2_TO_G2  = "BLS12_MAP_FP2_TO_G2"
-)
+// precompileNames maps precompile addresses to their canonical names as defined by EIP-7910
+var precompileNames = map[common.Address]string{
+	common.BytesToAddress([]byte{0x1}):       "ECREC",
+	common.BytesToAddress([]byte{0x2}):       "SHA256",
+	common.BytesToAddress([]byte{0x3}):       "RIPEMD160",
+	common.BytesToAddress([]byte{0x4}):       "ID",
+	common.BytesToAddress([]byte{0x5}):       "MODEXP",
+	common.BytesToAddress([]byte{0x6}):       "BN254_ADD",
+	common.BytesToAddress([]byte{0x7}):       "BN254_MUL",
+	common.BytesToAddress([]byte{0x8}):       "BN254_PAIRING",
+	common.BytesToAddress([]byte{0x9}):       "BLAKE2F",
+	common.BytesToAddress([]byte{0xa}):       "KZG_POINT_EVALUATION",
+	common.BytesToAddress([]byte{0xb}):       "BLS12_G1ADD",
+	common.BytesToAddress([]byte{0xc}):       "BLS12_G1MSM",
+	common.BytesToAddress([]byte{0xd}):       "BLS12_G2ADD",
+	common.BytesToAddress([]byte{0xe}):       "BLS12_G2MSM",
+	common.BytesToAddress([]byte{0xf}):       "BLS12_PAIRING_CHECK",
+	common.BytesToAddress([]byte{0x10}):      "BLS12_MAP_FP_TO_G1",
+	common.BytesToAddress([]byte{0x11}):      "BLS12_MAP_FP2_TO_G2",
+	common.BytesToAddress([]byte{0x1, 0x00}): "P256VERIFY", // EIP-7212 precompile
+}
 
 // ============================================================================
 // Fork Configuration Building
@@ -91,7 +93,7 @@ const (
 // BuildForkConfig constructs a complete fork configuration for the given block number and time
 func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) (*ForkConfig, error) {
 	// Calculate activation time for this fork
-	activationTime, err := calculateActivationTimeForFork(chainConfig, blockNumber, blockTime)
+	activationTime, err := calculateActivationTimeForFork(chainConfig, blockTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate activation time: %w", err)
 	}
@@ -109,6 +111,160 @@ func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockT
 	}
 
 	return config, nil
+}
+
+// ============================================================================
+// System Contracts
+// ============================================================================
+
+// getSystemContracts returns the system contract addresses for the given chain rules
+// formatted for EIP-7910 eth_config response.
+func getSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map[string]common.Address {
+	contracts := make(map[string]common.Address)
+
+	// Deposit contract (Pre-merge, since this is post-merge only always load it)
+	if chainConfig.DepositContractAddress != (common.Address{}) {
+		contracts[DepositContractAddressName] = chainConfig.DepositContractAddress
+	}
+
+	if rules.IsCancun {
+		// EIP-4788: Beacon block root in the EVM (activated in Cancun)
+		contracts[BeaconRootsAddressName] = params.BeaconRootsAddress
+	}
+
+	if rules.IsPrague {
+		// EIP-2935: Serve historical block hashes from state (activated in Prague)
+		contracts[HistoryStorageAddressName] = params.HistoryStorageAddress
+		// EIP-7002: Execution layer triggerable withdrawals (activated in Prague)
+		contracts[WithdrawalRequestPredeployAddressName] = params.WithdrawalQueueAddress
+		// EIP-7251: Increase the MAX_EFFECTIVE_BALANCE (activated in Prague)
+		contracts[ConsolidationRequestPredeployAddressName] = params.ConsolidationQueueAddress
+	}
+
+	return contracts
+}
+
+// ============================================================================
+// Precompiles
+// ============================================================================
+
+// getActivePrecompiles returns a map of precompile addresses to their names
+// for the given chain rules, formatted for EIP-7910 eth_config response.
+func getActivePrecompiles(rules params.Rules) map[string]string {
+	addresses := vm.ActivePrecompiles(rules)
+	precompiles := make(map[string]string, len(addresses))
+
+	for _, addr := range addresses {
+		if name, ok := precompileNames[addr]; ok {
+			precompiles[strings.ToLower(addr.Hex())] = name
+		}
+	}
+
+	return precompiles
+}
+
+// ============================================================================
+// Activation Time Calculation
+// ============================================================================
+
+// calculateActivationTimeForFork calculates the activation time for a specific fork
+func calculateActivationTimeForFork(chainConfig *params.ChainConfig, targetBlockTime uint64) (uint64, error) {
+	fork := chainConfig.LatestFork(targetBlockTime)
+	time := chainConfig.Timestamp(fork)
+	if time == nil {
+		return 0, fmt.Errorf("failed to calculate fork time, only post-merge forks expected")
+	} else {
+		return *time, nil
+	}
+}
+
+// GetNextForkActivationTime returns the activation time of the next scheduled fork
+func GetNextForkActivationTime(chainConfig *params.ChainConfig, currentBlockTime uint64) (uint64, error) {
+	// Look for the next time-based fork that hasn't activated yet
+	// no handy methods, we have to hand enumerate
+	forks := []*uint64{
+		chainConfig.ShanghaiTime,
+		chainConfig.CancunTime,
+		chainConfig.PragueTime,
+		chainConfig.OsakaTime,
+		chainConfig.BPO1Time,
+		chainConfig.BPO2Time,
+		chainConfig.BPO3Time,
+		chainConfig.BPO4Time,
+		chainConfig.BPO5Time,
+	}
+	//TODO should we hedge and sort? for testnets are BPOs guaranteed to keep number/named fork order?
+
+	for _, fork := range forks {
+		if fork != nil && *fork > currentBlockTime {
+			return *fork, nil
+		}
+	}
+
+	// No future fork scheduled
+	return 0, fmt.Errorf("no future fork scheduled")
+}
+
+// GetLastKnownForkActivationTime returns the activation time of the last known fork
+func GetLastKnownForkActivationTime(chainConfig *params.ChainConfig) (uint64, error) {
+	time := chainConfig.Timestamp(chainConfig.LatestFork(math.MaxUint64))
+	if time == nil {
+		// No time-based forks configured - this shouldn't happen in practice
+		return 0, fmt.Errorf("no time-based forks configured")
+	} else {
+		return *time, nil
+	}
+}
+
+// ============================================================================
+// Blob Configuration
+// ============================================================================
+
+// extractBlobSchedule extracts blob configuration parameters for a specific fork
+// based on chain configuration and activation rules.
+func extractBlobSchedule(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) BlobScheduleParams {
+	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
+
+	// Default blob schedule (pre-EIP-4844)
+	if !rules.IsCancun {
+		return BlobScheduleParams{
+			BaseFeeUpdateFraction: 0,
+			Max:                   0,
+			Target:                0,
+		}
+	}
+
+	// Get the blob schedule configuration
+	blobScheduleConfig := chainConfig.BlobScheduleConfig
+	if blobScheduleConfig == nil {
+		// Fallback to default Cancun blob configuration
+		return BlobScheduleParams{
+			BaseFeeUpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			Max:                   params.DefaultCancunBlobConfig.Max,
+			Target:                params.DefaultCancunBlobConfig.Target,
+		}
+	}
+
+	// Determine which blob config to use based on fork
+	var blobConfig *params.BlobConfig
+
+	switch {
+	case rules.IsOsaka && blobScheduleConfig.Osaka != nil:
+		blobConfig = blobScheduleConfig.Osaka
+	case rules.IsPrague && blobScheduleConfig.Prague != nil:
+		blobConfig = blobScheduleConfig.Prague
+	case rules.IsCancun && blobScheduleConfig.Cancun != nil:
+		blobConfig = blobScheduleConfig.Cancun
+	default:
+		// Fallback to default Cancun configuration
+		blobConfig = params.DefaultCancunBlobConfig
+	}
+
+	return BlobScheduleParams{
+		BaseFeeUpdateFraction: blobConfig.UpdateFraction,
+		Max:                   blobConfig.Max,
+		Target:                blobConfig.Target,
+	}
 }
 
 // ============================================================================
@@ -390,320 +546,5 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.IsNil()
 	default:
 		return true // if we don't know what it is, don't jsonify it
-	}
-}
-
-// ============================================================================
-// System Contracts
-// ============================================================================
-
-// getSystemContracts returns the system contract addresses for the given chain rules
-// formatted for EIP-7910 eth_config response.
-func getSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map[string]common.Address {
-	contracts := make(map[string]common.Address)
-
-	// EIP-4788: Beacon block root in the EVM (activated in Cancun)
-	if rules.IsCancun {
-		contracts[BeaconRootsAddressName] = params.BeaconRootsAddress
-	}
-
-	// EIP-2935: Serve historical block hashes from state (activated in Prague)
-	if rules.IsPrague {
-		contracts[HistoryStorageAddressName] = params.HistoryStorageAddress
-	}
-
-	// EIP-7002: Execution layer triggerable withdrawals (activated in Prague)
-	if rules.IsPrague {
-		contracts[WithdrawalRequestPredeployAddressName] = params.WithdrawalQueueAddress
-	}
-
-	// EIP-7251: Increase the MAX_EFFECTIVE_BALANCE (activated in Prague)
-	if rules.IsPrague {
-		contracts[ConsolidationRequestPredeployAddressName] = params.ConsolidationQueueAddress
-	}
-
-	// Deposit contract (available since genesis on mainnet, varies by network)
-	if chainConfig.DepositContractAddress != (common.Address{}) {
-		contracts[DepositContractAddressName] = chainConfig.DepositContractAddress
-	}
-
-	return contracts
-}
-
-// ============================================================================
-// Precompiles
-// ============================================================================
-
-// getActivePrecompiles returns a map of precompile addresses to their names
-// for the given chain rules, formatted for EIP-7910 eth_config response.
-func getActivePrecompiles(rules params.Rules) map[string]string {
-	addresses := vm.ActivePrecompiles(rules)
-	precompiles := make(map[string]string, len(addresses))
-
-	for _, addr := range addresses {
-		name := getPrecompileName(addr)
-		if name != "" {
-			precompiles[strings.ToLower(addr.Hex())] = name
-		}
-	}
-
-	return precompiles
-}
-
-// GetActivePrecompilesForFork returns the active precompiles for a specific fork
-// based on chain configuration and activation time or block number.
-func getActivePrecompilesForFork(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) map[string]string {
-	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
-	return getActivePrecompiles(rules)
-}
-
-// getPrecompileName returns the canonical name for a precompile address as defined by EIP-7910
-func getPrecompileName(addr common.Address) string {
-	// Convert address to byte slice for comparison
-	addrBytes := addr.Bytes()
-
-	// Check for known precompile addresses based on the last significant bytes
-	switch {
-	case isAddressEqual(addrBytes, []byte{0x1}):
-		return PrecompileECREC
-	case isAddressEqual(addrBytes, []byte{0x2}):
-		return PrecompileSHA256
-	case isAddressEqual(addrBytes, []byte{0x3}):
-		return PrecompileRIPEMD160
-	case isAddressEqual(addrBytes, []byte{0x4}):
-		return PrecompileID
-	case isAddressEqual(addrBytes, []byte{0x5}):
-		return PrecompileMODEXP
-	case isAddressEqual(addrBytes, []byte{0x6}):
-		return PrecompileBN254_ADD
-	case isAddressEqual(addrBytes, []byte{0x7}):
-		return PrecompileBN254_MUL
-	case isAddressEqual(addrBytes, []byte{0x8}):
-		return PrecompileBN254_PAIRING
-	case isAddressEqual(addrBytes, []byte{0x9}):
-		return PrecompileBLAKE2F
-	case isAddressEqual(addrBytes, []byte{0xa}):
-		return PrecompileKZG_POINT_EVALUATION
-	case isAddressEqual(addrBytes, []byte{0xb}):
-		return PrecompileBLS12_G1ADD
-	case isAddressEqual(addrBytes, []byte{0xc}):
-		return PrecompileBLS12_G1MSM
-	case isAddressEqual(addrBytes, []byte{0xd}):
-		return PrecompileBLS12_G2ADD
-	case isAddressEqual(addrBytes, []byte{0xe}):
-		return PrecompileBLS12_G2MSM
-	case isAddressEqual(addrBytes, []byte{0xf}):
-		return PrecompileBLS12_PAIRING_CHECK
-	case isAddressEqual(addrBytes, []byte{0x10}):
-		return PrecompileBLS12_MAP_FP_TO_G1
-	case isAddressEqual(addrBytes, []byte{0x11}):
-		return PrecompileBLS12_MAP_FP2_TO_G2
-	case isAddressEqual(addrBytes, []byte{0x1, 0x00}):
-		return "P256VERIFY" // EIP-7212 precompile
-	default:
-		// Unknown precompile - this shouldn't happen with well-known addresses
-		// but we return empty string to filter it out
-		return ""
-	}
-}
-
-// isAddressEqual checks if an address (20 bytes) ends with the given suffix bytes
-func isAddressEqual(fullAddr []byte, suffix []byte) bool {
-	if len(fullAddr) != 20 || len(suffix) == 0 || len(suffix) > 20 {
-		return false
-	}
-
-	// Check if the suffix matches the end of the address
-	start := 20 - len(suffix)
-	for i := 0; i < len(suffix); i++ {
-		if fullAddr[start+i] != suffix[i] {
-			return false
-		}
-	}
-
-	// Check that all preceding bytes are zero
-	for i := 0; i < start; i++ {
-		if fullAddr[i] != 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-// ============================================================================
-// Activation Time Calculation
-// ============================================================================
-
-// calculateActivationTimeForFork calculates the activation time for a specific fork
-func calculateActivationTimeForFork(chainConfig *params.ChainConfig, targetBlockNumber uint64, targetBlockTime uint64) (uint64, error) {
-	return determineActivationTime(chainConfig, targetBlockNumber, targetBlockTime)
-}
-
-// determineActivationTime determines the activation time for the fork that would be active
-// at the given block number and time
-func determineActivationTime(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) (uint64, error) {
-	// Check time-based forks first (more recent)
-	if chainConfig.VerkleTime != nil && blockTime >= *chainConfig.VerkleTime {
-		return *chainConfig.VerkleTime, nil
-	}
-	if chainConfig.OsakaTime != nil && blockTime >= *chainConfig.OsakaTime {
-		return *chainConfig.OsakaTime, nil
-	}
-	if chainConfig.PragueTime != nil && blockTime >= *chainConfig.PragueTime {
-		return *chainConfig.PragueTime, nil
-	}
-	if chainConfig.CancunTime != nil && blockTime >= *chainConfig.CancunTime {
-		return *chainConfig.CancunTime, nil
-	}
-	if chainConfig.ShanghaiTime != nil && blockTime >= *chainConfig.ShanghaiTime {
-		return *chainConfig.ShanghaiTime, nil
-	}
-
-	// Check block-based forks (older forks)
-	// For block-based forks, we use 0 as activation time since they were activated at genesis
-	// or we would need to estimate the timestamp from block number
-
-	blockNumberBig := new(big.Int).SetUint64(blockNumber)
-
-	if chainConfig.GrayGlacierBlock != nil && blockNumberBig.Cmp(chainConfig.GrayGlacierBlock) >= 0 {
-		return 0, nil // Block-based fork, use 0 for activation time
-	}
-	if chainConfig.ArrowGlacierBlock != nil && blockNumberBig.Cmp(chainConfig.ArrowGlacierBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.LondonBlock != nil && blockNumberBig.Cmp(chainConfig.LondonBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.BerlinBlock != nil && blockNumberBig.Cmp(chainConfig.BerlinBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.MuirGlacierBlock != nil && blockNumberBig.Cmp(chainConfig.MuirGlacierBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.IstanbulBlock != nil && blockNumberBig.Cmp(chainConfig.IstanbulBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.PetersburgBlock != nil && blockNumberBig.Cmp(chainConfig.PetersburgBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.ConstantinopleBlock != nil && blockNumberBig.Cmp(chainConfig.ConstantinopleBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.ByzantiumBlock != nil && blockNumberBig.Cmp(chainConfig.ByzantiumBlock) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.EIP158Block != nil && blockNumberBig.Cmp(chainConfig.EIP158Block) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.EIP155Block != nil && blockNumberBig.Cmp(chainConfig.EIP155Block) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.EIP150Block != nil && blockNumberBig.Cmp(chainConfig.EIP150Block) >= 0 {
-		return 0, nil
-	}
-	if chainConfig.HomesteadBlock != nil && blockNumberBig.Cmp(chainConfig.HomesteadBlock) >= 0 {
-		return 0, nil
-	}
-
-	// Default to genesis (block 0)
-	return 0, nil
-}
-
-// GetNextForkActivationTime returns the activation time of the next scheduled fork
-func GetNextForkActivationTime(chainConfig *params.ChainConfig, currentBlockTime uint64) (uint64, error) {
-	// Look for the next time-based fork that hasn't activated yet
-	forks := []struct {
-		time *uint64
-		name string
-	}{
-		{chainConfig.ShanghaiTime, "shanghai"},
-		{chainConfig.CancunTime, "cancun"},
-		{chainConfig.PragueTime, "prague"},
-		{chainConfig.OsakaTime, "osaka"},
-		{chainConfig.VerkleTime, "verkle"},
-	}
-
-	for _, fork := range forks {
-		if fork.time != nil && *fork.time > currentBlockTime {
-			return *fork.time, nil
-		}
-	}
-
-	// No future fork scheduled
-	return 0, fmt.Errorf("no future fork scheduled")
-}
-
-// GetLastKnownForkActivationTime returns the activation time of the last known fork
-func GetLastKnownForkActivationTime(chainConfig *params.ChainConfig) (uint64, error) {
-	// Look for the latest configured fork (reverse order)
-	if chainConfig.VerkleTime != nil {
-		return *chainConfig.VerkleTime, nil
-	}
-	if chainConfig.OsakaTime != nil {
-		return *chainConfig.OsakaTime, nil
-	}
-	if chainConfig.PragueTime != nil {
-		return *chainConfig.PragueTime, nil
-	}
-	if chainConfig.CancunTime != nil {
-		return *chainConfig.CancunTime, nil
-	}
-	if chainConfig.ShanghaiTime != nil {
-		return *chainConfig.ShanghaiTime, nil
-	}
-
-	// No time-based forks configured - this shouldn't happen in practice
-	return 0, fmt.Errorf("no time-based forks configured")
-}
-
-// ============================================================================
-// Blob Configuration
-// ============================================================================
-
-// extractBlobSchedule extracts blob configuration parameters for a specific fork
-// based on chain configuration and activation rules.
-func extractBlobSchedule(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) BlobScheduleParams {
-	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
-
-	// Default blob schedule (pre-EIP-4844)
-	if !rules.IsCancun {
-		return BlobScheduleParams{
-			BaseFeeUpdateFraction: 0,
-			Max:                   0,
-			Target:                0,
-		}
-	}
-
-	// Get the blob schedule configuration
-	blobScheduleConfig := chainConfig.BlobScheduleConfig
-	if blobScheduleConfig == nil {
-		// Fallback to default Cancun blob configuration
-		return BlobScheduleParams{
-			BaseFeeUpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
-			Max:                   params.DefaultCancunBlobConfig.Max,
-			Target:                params.DefaultCancunBlobConfig.Target,
-		}
-	}
-
-	// Determine which blob config to use based on fork
-	var blobConfig *params.BlobConfig
-
-	switch {
-	case rules.IsOsaka && blobScheduleConfig.Osaka != nil:
-		blobConfig = blobScheduleConfig.Osaka
-	case rules.IsPrague && blobScheduleConfig.Prague != nil:
-		blobConfig = blobScheduleConfig.Prague
-	case rules.IsCancun && blobScheduleConfig.Cancun != nil:
-		blobConfig = blobScheduleConfig.Cancun
-	default:
-		// Fallback to default Cancun configuration
-		blobConfig = params.DefaultCancunBlobConfig
-	}
-
-	return BlobScheduleParams{
-		BaseFeeUpdateFraction: blobConfig.UpdateFraction,
-		Max:                   blobConfig.Max,
-		Target:                blobConfig.Target,
 	}
 }

@@ -750,7 +750,8 @@ func TestGetActivePrecompilesForFork(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			precompiles := getActivePrecompilesForFork(chainConfig, tt.blockNumber, tt.blockTime)
+			rules := chainConfig.Rules(new(big.Int).SetUint64(tt.blockNumber), true, tt.blockTime)
+			precompiles := getActivePrecompiles(rules)
 
 			if len(precompiles) != tt.expectedLen {
 				t.Errorf("Expected %d precompiles, got %d", tt.expectedLen, len(precompiles))
@@ -836,58 +837,9 @@ func TestGetPrecompileName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getPrecompileName(tt.address)
+			result := precompileNames[tt.address]
 			if result != tt.expected {
 				t.Errorf("getPrecompileName(%s) = %q, want %q", tt.address.Hex(), result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestIsAddressEqual(t *testing.T) {
-	tests := []struct {
-		name     string
-		fullAddr []byte
-		suffix   []byte
-		expected bool
-	}{
-		{
-			name:     "single byte match",
-			fullAddr: common.HexToAddress("0x0000000000000000000000000000000000000001").Bytes(),
-			suffix:   []byte{0x1},
-			expected: true,
-		},
-		{
-			name:     "two byte match",
-			fullAddr: common.HexToAddress("0x0000000000000000000000000000000000000100").Bytes(),
-			suffix:   []byte{0x1, 0x00},
-			expected: true,
-		},
-		{
-			name:     "no match",
-			fullAddr: common.HexToAddress("0x0000000000000000000000000000000000000001").Bytes(),
-			suffix:   []byte{0x2},
-			expected: false,
-		},
-		{
-			name:     "non-zero prefix",
-			fullAddr: common.HexToAddress("0x1000000000000000000000000000000000000001").Bytes(),
-			suffix:   []byte{0x1},
-			expected: false,
-		},
-		{
-			name:     "empty suffix",
-			fullAddr: common.HexToAddress("0x0000000000000000000000000000000000000001").Bytes(),
-			suffix:   []byte{},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isAddressEqual(tt.fullAddr, tt.suffix)
-			if result != tt.expected {
-				t.Errorf("isAddressEqual(%v, %v) = %v, want %v", tt.fullAddr, tt.suffix, result, tt.expected)
 			}
 		})
 	}
