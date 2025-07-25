@@ -19,6 +19,7 @@ package ethapi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"math"
@@ -86,6 +87,9 @@ var precompileNames = map[common.Address]string{
 	common.BytesToAddress([]byte{0x1, 0x00}): "P256VERIFY", // EIP-7212 precompile
 }
 
+// / When asking for a future fork time this signals there is no future configured fork
+var ErrNoFutureFork = errors.New("no future fork scheduled")
+
 // ============================================================================
 // Fork Configuration Building
 // ============================================================================
@@ -94,7 +98,9 @@ var precompileNames = map[common.Address]string{
 func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) (*ForkConfig, error) {
 	// Calculate activation time for this fork
 	activationTime, err := calculateActivationTimeForFork(chainConfig, blockTime)
-	if err != nil {
+	if err == ErrNoFutureFork {
+		return nil, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to calculate activation time: %w", err)
 	}
 
@@ -202,7 +208,7 @@ func GetNextForkActivationTime(chainConfig *params.ChainConfig, currentBlockTime
 	}
 
 	// No future fork scheduled
-	return 0, fmt.Errorf("no future fork scheduled")
+	return 0, ErrNoFutureFork
 }
 
 // GetLastKnownForkActivationTime returns the activation time of the last known fork
