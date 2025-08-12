@@ -17,19 +17,16 @@
 package ethapi
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"math"
 	"math/big"
-	"reflect"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -39,11 +36,11 @@ import (
 // ============================================================================
 
 // ForkConfig represents the configuration of a specific fork as defined by EIP-7910.
-// All fields are required and must be present in canonical order for proper hashing.
 type ForkConfig struct {
 	ActivationTime  uint64                    `json:"activationTime"`
 	BlobSchedule    BlobScheduleParams        `json:"blobSchedule"`
 	ChainID         string                    `json:"chainId"`
+	ForkID          string                    `json:"forkId"`
 	Precompiles     map[string]string         `json:"precompiles"`
 	SystemContracts map[string]common.Address `json:"systemContracts"`
 }
@@ -95,7 +92,7 @@ var ErrNoFutureFork = errors.New("no future fork scheduled")
 // ============================================================================
 
 // BuildForkConfig constructs a complete fork configuration for the given block number and time
-func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockTime uint64) (*ForkConfig, error) {
+func BuildForkConfig(chainConfig *params.ChainConfig, genesis *types.Block, blockNumber uint64, blockTime uint64) (*ForkConfig, error) {
 	// Calculate activation time for this fork
 	activationTime, err := calculateActivationTimeForFork(chainConfig, blockTime)
 	if err == ErrNoFutureFork {
@@ -107,11 +104,16 @@ func BuildForkConfig(chainConfig *params.ChainConfig, blockNumber uint64, blockT
 	// Get chain rules for this block
 	rules := chainConfig.Rules(new(big.Int).SetUint64(blockNumber), true, blockTime)
 
+	// Calculate fork ID
+	forkId := forkid.NewID(chainConfig, genesis, blockNumber, activationTime)
+	forkIdStr := "0x" + hex.EncodeToString(forkId.Hash[:])
+
 	// Build configuration
 	config := &ForkConfig{
 		ActivationTime:  activationTime,
 		BlobSchedule:    extractBlobSchedule(chainConfig, blockNumber, blockTime),
 		ChainID:         fmt.Sprintf("0x%x", chainConfig.ChainID.Uint64()),
+		ForkID:          forkIdStr,
 		Precompiles:     getActivePrecompiles(rules),
 		SystemContracts: getSystemContracts(rules, chainConfig),
 	}
@@ -154,7 +156,7 @@ func getSystemContracts(rules params.Rules, chainConfig *params.ChainConfig) map
 // Precompiles
 // ============================================================================
 
-// getActivePrecompiles returns a map of precompile addresses to their names
+// getActivePrecompiles returns a map of precompile names to their addresses
 // for the given chain rules, formatted for EIP-7910 eth_config response.
 func getActivePrecompiles(rules params.Rules) map[string]string {
 	addresses := vm.ActivePrecompiles(rules)
@@ -162,7 +164,7 @@ func getActivePrecompiles(rules params.Rules) map[string]string {
 
 	for _, addr := range addresses {
 		if name, ok := precompileNames[addr]; ok {
-			precompiles[strings.ToLower(addr.Hex())] = name
+			precompiles[name] = strings.ToLower(addr.Hex())
 		}
 	}
 
@@ -270,287 +272,5 @@ func extractBlobSchedule(chainConfig *params.ChainConfig, blockNumber uint64, bl
 		BaseFeeUpdateFraction: blobConfig.UpdateFraction,
 		Max:                   blobConfig.Max,
 		Target:                blobConfig.Target,
-	}
-}
-
-// ============================================================================
-// Configuration Hashing
-// ============================================================================
-
-// hashConfig computes the CRC-32 hash of a fork configuration as specified by EIP-7910.
-// The configuration is first serialized to canonical JSON (RFC-8785) and then hashed.
-func hashConfig(config *ForkConfig) (string, error) {
-	if config == nil {
-		return "", fmt.Errorf("config cannot be nil")
-	}
-
-	// Serialize to canonical JSON
-	canonical, err := canonicalJSON(config)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize config to canonical JSON: %w", err)
-	}
-
-	// Compute CRC-32 hash
-	hash := crc32.ChecksumIEEE(canonical)
-
-	// Return as hex string with 0x prefix
-	return fmt.Sprintf("0x%08x", hash), nil
-}
-
-// ============================================================================
-// Canonical JSON Implementation (RFC-8785)
-// ============================================================================
-
-// canonicalJSON produces canonical JSON as per RFC-8785 for deterministic hashing.
-// This implementation ensures:
-// - No whitespace except inside strings
-// - Object keys sorted lexicographically
-// - Numeric values in simplest form
-// - No trailing zeros after decimal point
-func canonicalJSON(v interface{}) ([]byte, error) {
-	return canonicalMarshal(reflect.ValueOf(v))
-}
-
-// canonicalMarshal recursively marshals a value to canonical JSON
-//
-//nolint:exhaustive // Unsupported types handled in default case
-func canonicalMarshal(v reflect.Value) ([]byte, error) {
-	// Handle invalid values first
-	if !v.IsValid() {
-		return []byte("null"), nil
-	}
-
-	// Special handling for common.Address type
-	if v.Type() == reflect.TypeOf(common.Address{}) {
-		addr := v.Interface().(common.Address)
-		return json.Marshal(addr.Hex())
-	}
-
-	switch v.Kind() {
-	case reflect.Invalid:
-		return []byte("null"), nil
-	case reflect.Bool:
-		if v.Bool() {
-			return []byte("true"), nil
-		}
-		return []byte("false"), nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return []byte(strconv.FormatInt(v.Int(), 10)), nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return []byte(strconv.FormatUint(v.Uint(), 10)), nil
-	case reflect.Float32, reflect.Float64:
-		f := v.Float()
-		// Use the simplest form - remove trailing zeros
-		s := strconv.FormatFloat(f, 'f', -1, 64)
-		return []byte(s), nil
-	case reflect.String:
-		return json.Marshal(v.String())
-	case reflect.Array, reflect.Slice:
-		if v.Kind() == reflect.Slice && v.IsNil() {
-			return []byte("null"), nil
-		}
-		var buf bytes.Buffer
-		buf.WriteByte('[')
-		for i := 0; i < v.Len(); i++ {
-			if i > 0 {
-				buf.WriteByte(',')
-			}
-			elemData, err := canonicalMarshal(v.Index(i))
-			if err != nil {
-				return nil, err
-			}
-			buf.Write(elemData)
-		}
-		buf.WriteByte(']')
-		return buf.Bytes(), nil
-	case reflect.Map:
-		if v.IsNil() {
-			return []byte("null"), nil
-		}
-		return canonicalMarshalMap(v)
-	case reflect.Struct:
-		return canonicalMarshalStruct(v)
-	case reflect.Ptr:
-		if v.IsNil() {
-			return []byte("null"), nil
-		}
-		return canonicalMarshal(v.Elem())
-	case reflect.Interface:
-		if v.IsNil() {
-			return []byte("null"), nil
-		}
-		return canonicalMarshal(v.Elem())
-	default:
-		return nil, fmt.Errorf("unsupported type: %v", v.Type())
-	}
-}
-
-// canonicalMarshalMap marshals a map with keys sorted lexicographically
-func canonicalMarshalMap(v reflect.Value) ([]byte, error) {
-	keys := v.MapKeys()
-	if len(keys) == 0 {
-		return []byte("{}"), nil
-	}
-
-	// Convert keys to strings and sort them
-	keyStrings := make([]string, len(keys))
-	keyMap := make(map[string]reflect.Value)
-
-	for i, key := range keys {
-		var keyStr string
-		switch key.Kind() {
-		case reflect.String:
-			keyStr = key.String()
-		default:
-			keyData, err := canonicalMarshal(key)
-			if err != nil {
-				return nil, err
-			}
-			keyStr = string(keyData)
-			// Remove quotes for non-string keys when using as map key
-			if strings.HasPrefix(keyStr, `"`) && strings.HasSuffix(keyStr, `"`) {
-				keyStr = keyStr[1 : len(keyStr)-1]
-			}
-		}
-		keyStrings[i] = keyStr
-		keyMap[keyStr] = key
-	}
-
-	sort.Strings(keyStrings)
-
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	for i, keyStr := range keyStrings {
-		if i > 0 {
-			buf.WriteByte(',')
-		}
-
-		// Marshal the key as a JSON string
-		keyJSON, err := json.Marshal(keyStr)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(keyJSON)
-		buf.WriteByte(':')
-
-		// Marshal the value
-		value := v.MapIndex(keyMap[keyStr])
-		valueData, err := canonicalMarshal(value)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(valueData)
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-// canonicalMarshalStruct marshals a struct with JSON tags, sorted by field names
-func canonicalMarshalStruct(v reflect.Value) ([]byte, error) {
-	t := v.Type()
-
-	type field struct {
-		name      string
-		value     reflect.Value
-		omitEmpty bool
-	}
-
-	var fields []field
-
-	for i := 0; i < v.NumField(); i++ {
-		fieldValue := v.Field(i)
-		fieldType := t.Field(i)
-
-		// Skip unexported fields
-		if !fieldValue.CanInterface() {
-			continue
-		}
-
-		// Get JSON tag
-		tag := fieldType.Tag.Get("json")
-		if tag == "-" {
-			continue
-		}
-
-		name := fieldType.Name
-		omitEmpty := false
-
-		if tag != "" {
-			parts := strings.Split(tag, ",")
-			if parts[0] != "" {
-				name = parts[0]
-			}
-			for _, part := range parts[1:] {
-				if part == "omitempty" {
-					omitEmpty = true
-					break
-				}
-			}
-		}
-
-		// Skip if omitempty and value is empty
-		if omitEmpty && isEmptyValue(fieldValue) {
-			continue
-		}
-
-		fields = append(fields, field{
-			name:      name,
-			value:     fieldValue,
-			omitEmpty: omitEmpty,
-		})
-	}
-
-	// Sort fields by name
-	sort.Slice(fields, func(i, j int) bool {
-		return fields[i].name < fields[j].name
-	})
-
-	if len(fields) == 0 {
-		return []byte("{}"), nil
-	}
-
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	for i, field := range fields {
-		if i > 0 {
-			buf.WriteByte(',')
-		}
-
-		// Marshal field name
-		nameJSON, err := json.Marshal(field.name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(nameJSON)
-		buf.WriteByte(':')
-
-		// Marshal field value
-		valueData, err := canonicalMarshal(field.value)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(valueData)
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
-}
-
-// isEmptyValue checks if a value is considered empty for omitempty
-func isEmptyValue(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
-		return v.Len() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr:
-		return v.IsNil()
-	default:
-		return true // if we don't know what it is, don't jsonify it
 	}
 }

@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -189,62 +188,47 @@ func (api *EthereumAPI) Config(_ context.Context) (map[string]interface{}, error
 
 	blockNumber := currentHeader.Number.Uint64()
 	blockTime := currentHeader.Time
+	response := make(map[string]interface{})
 
-	response := map[string]interface{}{}
-	err := generateConfigResponse(chainConfig, genesis, blockNumber, blockTime, response, "current")
+	// Build current fork configuration
+	currentConfig, err := BuildForkConfig(chainConfig, genesis, blockNumber, blockTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build current fork config: %w", err)
 	}
+	if currentConfig != nil {
+		response["current"] = *currentConfig
+	}
 
+	// Build next fork configuration if available
 	nextActivationTime, err := GetNextForkActivationTime(chainConfig, blockTime)
-	// skip if no next fork
-	if err != ErrNoFutureFork {
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate next fork time: %w", err)
-		}
-		nextBlockNumber := blockNumber + ((nextActivationTime - blockTime) / 12) // Assume 12s block time
-		err = generateConfigResponse(chainConfig, genesis, nextBlockNumber, nextActivationTime, response, "next")
+	if err == nil {
+		// Estimate block number for next fork (assume 12s block time)
+		nextBlockNumber := blockNumber + (nextActivationTime-blockTime)/12
+		nextConfig, err := BuildForkConfig(chainConfig, genesis, nextBlockNumber, nextActivationTime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build next fork config: %w", err)
 		}
+		if nextConfig != nil {
+			response["next"] = *nextConfig
+		}
 
+		// Build last known fork configuration (only if there's a next fork)
 		lastActivationTime, err := GetLastKnownForkActivationTime(chainConfig)
-		if err == nil {
+		if err != nil {
 			return nil, fmt.Errorf("failed to calculate last fork time: %w", err)
 		}
-		maxBlockNumber := uint64(999999999)
-		err = generateConfigResponse(chainConfig, genesis, maxBlockNumber, lastActivationTime, response, "next")
+		lastConfig, err := BuildForkConfig(chainConfig, genesis, ^uint64(0), lastActivationTime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build last fork config: %w", err)
 		}
+		if lastConfig != nil {
+			response["last"] = *lastConfig
+		}
+	} else if err != ErrNoFutureFork {
+		return nil, fmt.Errorf("failed to calculate next fork time: %w", err)
 	}
 
 	return response, nil
-}
-
-func generateConfigResponse(chainConfig *params.ChainConfig, genesis *types.Block, blockNumber uint64, activationTime uint64, response map[string]interface{}, prefix string) error {
-	config, err := BuildForkConfig(chainConfig, blockNumber, activationTime)
-	if err != nil {
-		return err
-	}
-	if config == nil {
-		// no fork config, and not an error, so don't update the response
-		return nil
-	}
-
-	configHash, err := hashConfig(config)
-	if err != nil {
-		return err
-	}
-
-	forkId := forkid.NewID(chainConfig, genesis, blockNumber, activationTime)
-	forkIdStr := "0x" + hex.EncodeToString(forkId.Hash[:])
-
-	response[prefix] = *config
-	response[prefix+"Hash"] = configHash
-	response[prefix+"ForkId"] = forkIdStr
-
-	return nil
 }
 
 // TxPoolAPI offers and API for the transaction pool. It only operates on data that is non-confidential.
